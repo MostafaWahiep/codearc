@@ -1,0 +1,29 @@
+{
+  "id": "search-engine",
+  "title": "Build a Search Engine",
+  "description": "Build a search engine that evolves from exact term matching to prefix and phrase search.",
+  "starterPath": "starter",
+  "levels": [
+    {
+      "id": "single-term-search",
+      "title": "Level 1: Single-Term Search",
+      "requirementPath": "level-1/requirements.md",
+      "designFeedbackPath": "level-1/design-feedback.md",
+      "testsPath": "level-1/tests"
+    },
+    {
+      "id": "prefix-search",
+      "title": "Level 2: Prefix Search",
+      "requirementPath": "level-2/requirements.md",
+      "designFeedbackPath": "level-2/design-feedback.md",
+      "testsPath": "level-2/tests"
+    },
+    {
+      "id": "phrase-search",
+      "title": "Level 3: Phrase Search",
+      "requirementPath": "level-3/requirements.md",
+      "designFeedbackPath": "level-3/design-feedback.md",
+      "testsPath": "level-3/tests"
+    }
+  ]
+}

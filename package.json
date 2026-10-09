@@ -1,0 +1,14 @@
+{
+  "name": "codearc",
+  "private": true,
+  "scripts": {
+    "validate:challenges": "node scripts/validate-challenges.mjs"
+  },
+  "devDependencies": {
+    "ajv": "^6.15.0"
+  },
+  "workspaces": [
+    "extension",
+    "shared"
+  ]
+}
