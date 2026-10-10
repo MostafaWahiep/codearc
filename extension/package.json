@@ -9,9 +9,30 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:codearc.challengeView",
+    "onCommand:codearc.startChallenge"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codearc",
+          "title": "CodeArc",
+          "icon": "media/codearc.svg"
+        }
+      ]
+    },
+    "views": {
+      "codearc": [
+        {
+          "id": "codearc.challengeView",
+          "name": "Challenge",
+          "type": "webview"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "codearc.startChallenge",
