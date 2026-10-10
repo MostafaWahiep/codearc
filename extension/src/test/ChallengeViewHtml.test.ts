@@ -59,7 +59,7 @@ suite('Challenge view rendering', () => {
 		assert.match(html, /Find &lt;unsafe&gt; content using `search`\./);
 		assert.match(html, /data-rendered-markdown/);
 		assert.doesNotMatch(html, /Hidden duplicate title/);
-		assert.match(html, /Open code in editor/);
+		assert.match(html, /Open challenge workspace/);
 		assert.match(html, /<details class="level-section level-section-collapsible" open>/);
 		assert.match(html, /<summary id="level-section-examples">Examples<\/summary>/);
 		assert.ok(html.indexOf('Public API') < html.indexOf('What must work'));

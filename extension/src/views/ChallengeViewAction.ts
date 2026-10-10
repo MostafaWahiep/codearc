@@ -4,7 +4,7 @@ export enum ChallengeViewAction {
 	RunChecks = 'runChecks',
 	SelectSection = 'selectSection',
 	SelectLevel = 'selectLevel',
-	OpenStarter = 'openStarter',
+	OpenWorkspace = 'openWorkspace',
 	BeginRefactor = 'beginRefactor',
 	Next = 'next',
 }

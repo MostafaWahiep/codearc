@@ -83,8 +83,8 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 				case ChallengeViewAction.SelectLevel:
 					this.snapshot = this.session.selectLevel(message.levelNumber);
 					break;
-				case ChallengeViewAction.OpenStarter:
-					await this.openStarter();
+				case ChallengeViewAction.OpenWorkspace:
+					await this.openWorkspace();
 					this.render();
 					return;
 				case ChallengeViewAction.BeginRefactor:
@@ -116,14 +116,18 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		this.render();
 	}
 
-	private async openStarter(): Promise<void> {
+	private async openWorkspace(): Promise<void> {
 		const challenge = this.snapshot.challenge;
 		if (!challenge) {
 			throw new Error('Start the challenge before opening starter code.');
 		}
-		await this.learnerWorkspace.openStarter(challenge);
+		if (!challenge.isViewingLatestLevel) {
+			throw new Error('Return to the latest level before opening the evolving codebase.');
+		}
+
+		await this.learnerWorkspace.openWorkspace(challenge);
 		void vscode.window.showInformationMessage(
-			'CodeArc opened an editable learner copy. Your changes will be preserved.',
+			'CodeArc added the learner workspace to Explorer. Your changes will be preserved.',
 		);
 	}
 
@@ -160,7 +164,7 @@ type ViewMessage =
 			| ChallengeViewAction.Start
 			| ChallengeViewAction.Restart
 			| ChallengeViewAction.RunChecks
-			| ChallengeViewAction.OpenStarter
+			| ChallengeViewAction.OpenWorkspace
 			| ChallengeViewAction.BeginRefactor
 			| ChallengeViewAction.Next;
 	}

@@ -174,7 +174,7 @@ async function renderBuild(
 			<p class="eyebrow">${challenge.isViewingLatestLevel ? 'Current requirement' : 'Completed requirement'}</p>
 			<h2 id="stage-title">${escapeHtml(challenge.currentLevel.title)}</h2>
 			${challenge.isViewingLatestLevel ? `<div class="requirement-action">
-				<button class="action action-secondary" type="button" data-action="${ChallengeViewAction.OpenStarter}">Open code in editor</button>
+				<button class="action action-secondary" type="button" data-action="${ChallengeViewAction.OpenWorkspace}">Open challenge workspace</button>
 			</div>` : ''}
 			<div class="level-sections">
 				${levelSections.join('')}

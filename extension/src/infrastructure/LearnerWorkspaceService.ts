@@ -5,7 +5,7 @@ import type { ChallengeSnapshot } from '../application/ChallengeController';
 export class LearnerWorkspaceService {
 	public constructor(private readonly storageRoot: vscode.Uri) {}
 
-	public async openStarter(challenge: ChallengeSnapshot): Promise<void> {
+	public async openWorkspace(challenge: ChallengeSnapshot): Promise<void> {
 		const workspacesRoot = vscode.Uri.joinPath(this.storageRoot, 'learner-workspaces');
 		const learnerRoot = vscode.Uri.joinPath(workspacesRoot, challenge.id);
 
@@ -35,6 +35,23 @@ export class LearnerWorkspaceService {
 		);
 		if (!(await uriExists(starterFile))) {
 			throw new Error('The challenge starter entrypoint could not be found.');
+		}
+
+		const isAlreadyOpen = vscode.workspace.workspaceFolders?.some(
+			(folder) => folder.uri.toString() === learnerRoot.toString(),
+		) ?? false;
+		if (!isAlreadyOpen) {
+			const wasAdded = vscode.workspace.updateWorkspaceFolders(
+				vscode.workspace.workspaceFolders?.length ?? 0,
+				0,
+				{
+					uri: learnerRoot,
+					name: `CodeArc: ${challenge.title}`,
+				},
+			);
+			if (!wasAdded) {
+				throw new Error('The learner workspace could not be added to VS Code.');
+			}
 		}
 
 		const document = await vscode.workspace.openTextDocument(starterFile);
