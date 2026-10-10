@@ -8,6 +8,7 @@
     "title",
     "description",
     "starterPath",
+    "entrypointPath",
     "levels"
   ],
   "properties": {
@@ -23,6 +24,9 @@
       "minLength": 1
     },
     "starterPath": {
+      "$ref": "#/definitions/relativePath"
+    },
+    "entrypointPath": {
       "$ref": "#/definitions/relativePath"
     },
     "levels": {

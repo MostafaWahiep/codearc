@@ -3,6 +3,7 @@ export interface ChallengeManifest {
 	title: string;
 	description: string;
 	starterPath: string;
+	entrypointPath: string;
 	levels: ChallengeLevelManifest[];
 }
 

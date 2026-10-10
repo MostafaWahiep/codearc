@@ -4,22 +4,13 @@ import type {
 	ChallengeLevelManifest,
 	ChallengeManifest,
 } from '@codearc/shared';
+import type {
+	ChallengeRepository,
+	LoadedChallenge,
+	LoadedChallengeLevel,
+} from '../application/Challenge';
 
-export interface LoadedChallengeLevel {
-	manifest: ChallengeLevelManifest;
-	requirement: string;
-	designFeedback: string;
-	testsPath: string;
-}
-
-export interface LoadedChallenge {
-	manifest: ChallengeManifest;
-	rootPath: string;
-	starterPath: string;
-	levels: LoadedChallengeLevel[];
-}
-
-export class FileChallengeRepository {
+export class FileChallengeRepository implements ChallengeRepository {
 	public constructor(private readonly challengeRoot: string) {}
 
 	public async load(): Promise<LoadedChallenge> {
@@ -36,11 +27,15 @@ export class FileChallengeRepository {
 				testsPath: resolveAssetPath(rootPath, level.testsPath),
 			})),
 		);
+		const starterPath = resolveAssetPath(rootPath, manifest.starterPath);
+		const entrypointPath = resolveAssetPath(rootPath, manifest.entrypointPath);
+		assertEntrypointInsideStarter(starterPath, entrypointPath);
 
 		return {
 			manifest,
 			rootPath,
-			starterPath: resolveAssetPath(rootPath, manifest.starterPath),
+			starterPath,
+			entrypointPath,
 			levels,
 		};
 	}
@@ -54,7 +49,7 @@ function parseManifest(value: unknown): ChallengeManifest {
 	const manifest = requireObject(value, 'challenge manifest');
 	assertOnlyKeys(
 		manifest,
-		['id', 'title', 'description', 'starterPath', 'levels'],
+		['id', 'title', 'description', 'starterPath', 'entrypointPath', 'levels'],
 		'challenge manifest',
 	);
 
@@ -73,6 +68,7 @@ function parseManifest(value: unknown): ChallengeManifest {
 		title: requireString(manifest, 'title', 'challenge manifest'),
 		description: requireString(manifest, 'description', 'challenge manifest'),
 		starterPath: requireRelativePath(manifest, 'starterPath', 'challenge manifest'),
+		entrypointPath: requireRelativePath(manifest, 'entrypointPath', 'challenge manifest'),
 		levels,
 	};
 }
@@ -167,4 +163,14 @@ function resolveAssetPath(rootPath: string, relativePath: string): string {
 	}
 
 	return resolvedPath;
+}
+
+function assertEntrypointInsideStarter(
+	starterPath: string,
+	entrypointPath: string,
+): void {
+	const starterPrefix = `${starterPath}${path.sep}`;
+	if (!entrypointPath.startsWith(starterPrefix)) {
+		throw new Error('Challenge entrypointPath must be inside starterPath.');
+	}
 }

@@ -63,6 +63,8 @@ async function validateChallenge(directoryName) {
 	}
 
 	await assertAsset(challengeRoot, manifest.starterPath, 'directory', 'starterPath');
+	await assertAsset(challengeRoot, manifest.entrypointPath, 'file', 'entrypointPath');
+	assertInsideStarter(challengeRoot, manifest.starterPath, manifest.entrypointPath);
 
 	for (const level of manifest.levels) {
 		await assertAsset(
@@ -83,6 +85,16 @@ async function validateChallenge(directoryName) {
 			'directory',
 			`${level.id}.testsPath`,
 		);
+	}
+}
+
+function assertInsideStarter(challengeRoot, starterPath, entrypointPath) {
+	const starterRoot = path.resolve(challengeRoot, starterPath);
+	const entrypoint = path.resolve(challengeRoot, entrypointPath);
+	const starterPrefix = `${starterRoot}${path.sep}`;
+
+	if (!entrypoint.startsWith(starterPrefix)) {
+		throw new Error(`entrypointPath must be inside starterPath: ${entrypointPath}`);
 	}
 }
 
