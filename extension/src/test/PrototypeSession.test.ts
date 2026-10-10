@@ -93,6 +93,29 @@ suite('PrototypeSession', () => {
 		assert.strictEqual(snapshot.challenge?.currentLevelNumber, 2);
 	});
 
+	test('shows saved evidence while revisiting a completed level', async () => {
+		const session = createSession();
+		await session.start();
+		await session.runChecks();
+		const passedLevel = await session.runChecks();
+		const savedAttempt = passedLevel.latestTestResult?.attempt;
+		session.advanceToNextLevel();
+
+		const history = session.selectLevel(1);
+
+		assert.strictEqual(history.challenge?.currentLevelNumber, 1);
+		assert.strictEqual(history.challenge?.latestUnlockedLevelNumber, 2);
+		assert.strictEqual(history.challenge?.isViewingLatestLevel, false);
+		assert.strictEqual(history.status, SessionStatus.Passed);
+		assert.strictEqual(history.latestTestResult?.attempt, savedAttempt);
+		assert.doesNotThrow(() => session.selectSection(ChallengeSection.Design));
+		await assert.rejects(session.runChecks(), /latest level/);
+
+		const latest = session.selectLevel(2);
+		assert.strictEqual(latest.status, SessionStatus.Idle);
+		assert.strictEqual(latest.latestTestResult, undefined);
+	});
+
 	test('restart resets mock attempts', async () => {
 		const session = createSession();
 		await session.start();

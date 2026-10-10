@@ -184,6 +184,13 @@ function renderImpactPreview(snapshot: PrototypeSessionSnapshot): string {
 }
 
 function renderEvidenceAction(snapshot: PrototypeSessionSnapshot): string {
+	const challenge = snapshot.challenge;
+	if (challenge && !challenge.isViewingLatestLevel) {
+		return `<div class="sticky-actions">
+			<button class="action" type="button" data-action="${ChallengeViewAction.SelectLevel}" data-level-number="${challenge.latestUnlockedLevelNumber}">Return to stage ${challenge.latestUnlockedLevelNumber}</button>
+		</div>`;
+	}
+
 	if (snapshot.status === SessionStatus.Failed) {
 		return `<div class="sticky-actions">
 			<button class="action" type="button" data-action="${ChallengeViewAction.RunChecks}">Simulate fix and rerun</button>

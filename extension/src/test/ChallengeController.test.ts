@@ -15,9 +15,34 @@ suite('ChallengeController', () => {
 		assert.strictEqual(snapshot.currentLevel.id, 'level-one');
 		assert.strictEqual(snapshot.currentLevel.sections[0].content, 'Level one requirement');
 		assert.strictEqual(snapshot.currentLevelNumber, 1);
+		assert.strictEqual(snapshot.latestUnlockedLevelNumber, 1);
+		assert.strictEqual(snapshot.isViewingLatestLevel, true);
 		assert.strictEqual(snapshot.totalLevels, 2);
 		assert.strictEqual(snapshot.currentLevel.designFeedback, undefined);
 		assert.strictEqual(snapshot.canAdvance, false);
+	});
+
+	test('revisits completed levels without moving progression backward', async () => {
+		const controller = createController();
+		await controller.start();
+		controller.completeCurrentLevel();
+		controller.advanceToNextLevel();
+
+		const history = controller.selectLevel(1);
+
+		assert.strictEqual(history.currentLevel.id, 'level-one');
+		assert.strictEqual(history.currentLevelNumber, 1);
+		assert.strictEqual(history.latestUnlockedLevelNumber, 2);
+		assert.strictEqual(history.isCurrentLevelComplete, true);
+		assert.strictEqual(history.isViewingLatestLevel, false);
+		assert.strictEqual(history.currentLevel.designFeedback, 'Level one feedback');
+		assert.strictEqual(history.canAdvance, false);
+		assert.throws(() => controller.completeCurrentLevel(), /latest level/);
+
+		const latest = controller.selectLevel(2);
+		assert.strictEqual(latest.currentLevel.id, 'level-two');
+		assert.strictEqual(latest.isViewingLatestLevel, true);
+		assert.throws(() => controller.selectLevel(3), /does not exist/);
 	});
 
 	test('reveals feedback after completing a level', async () => {

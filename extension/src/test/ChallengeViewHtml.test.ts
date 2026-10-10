@@ -100,6 +100,26 @@ suite('Challenge view rendering', () => {
 		assert.match(html, /1 failed/);
 	});
 
+	test('renders completed levels as navigation and keeps future levels locked', async () => {
+		const snapshot = createSnapshot();
+		if (!snapshot.challenge) {
+			assert.fail('Expected a challenge snapshot.');
+		}
+		snapshot.challenge.currentLevelNumber = 1;
+		snapshot.challenge.latestUnlockedLevelNumber = 2;
+		snapshot.challenge.isCurrentLevelComplete = true;
+		snapshot.challenge.isViewingLatestLevel = false;
+		snapshot.isEvolutionUnlocked = true;
+
+		const html = await renderChallenge(snapshot, markdownRenderer);
+
+		assert.match(html, /data-action="selectLevel"[\s\S]*?data-level-number="1"/);
+		assert.match(html, /data-action="selectLevel"[\s\S]*?data-level-number="2"/);
+		assert.doesNotMatch(html, /data-level-number="3"/);
+		assert.match(html, /Viewing completed stage 1/);
+		assert.match(html, /Return to stage 2/);
+	});
+
 	test('keeps Design feedback locked until the level passes', async () => {
 		const lockedHtml = await renderChallenge(createSnapshot({
 			activeSection: ChallengeSection.Design,
@@ -165,8 +185,11 @@ function createSnapshot(
 				testsPath: '/challenge/level-1/tests',
 			},
 			currentLevelNumber: 1,
+			latestUnlockedLevelNumber: 1,
 			totalLevels: 3,
 			isCurrentLevelComplete: false,
+			isViewingLatestLevel: true,
+			isLatestLevelComplete: false,
 			canAdvance: false,
 			isChallengeComplete: false,
 		},

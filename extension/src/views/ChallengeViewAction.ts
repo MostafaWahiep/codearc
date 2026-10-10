@@ -3,6 +3,7 @@ export enum ChallengeViewAction {
 	Restart = 'restart',
 	RunChecks = 'runChecks',
 	SelectSection = 'selectSection',
+	SelectLevel = 'selectLevel',
 	OpenStarter = 'openStarter',
 	BeginRefactor = 'beginRefactor',
 	Next = 'next',

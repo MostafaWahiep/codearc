@@ -67,7 +67,12 @@ document.addEventListener('click', (event) => {
 		button.disabled = true;
 	}
 
-	vscode.postMessage({ type, section: button.dataset.section });
+	const levelNumber = button.dataset.levelNumber;
+	vscode.postMessage({
+		type,
+		section: button.dataset.section,
+		levelNumber: levelNumber ? Number(levelNumber) : undefined,
+	});
 });
 
 document.addEventListener('keydown', (event) => {

@@ -80,6 +80,9 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 				case ChallengeViewAction.SelectSection:
 					this.snapshot = this.session.selectSection(message.section);
 					break;
+				case ChallengeViewAction.SelectLevel:
+					this.snapshot = this.session.selectLevel(message.levelNumber);
+					break;
 				case ChallengeViewAction.OpenStarter:
 					await this.openStarter();
 					this.render();
@@ -118,7 +121,6 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		if (!challenge) {
 			throw new Error('Start the challenge before opening starter code.');
 		}
-
 		await this.learnerWorkspace.openStarter(challenge);
 		void vscode.window.showInformationMessage(
 			'CodeArc opened an editable learner copy. Your changes will be preserved.',
@@ -162,7 +164,8 @@ type ViewMessage =
 			| ChallengeViewAction.BeginRefactor
 			| ChallengeViewAction.Next;
 	}
-	| { type: ChallengeViewAction.SelectSection; section: ChallengeSection };
+	| { type: ChallengeViewAction.SelectSection; section: ChallengeSection }
+	| { type: ChallengeViewAction.SelectLevel; levelNumber: number };
 
 function isViewMessage(value: unknown): value is ViewMessage {
 	if (typeof value !== 'object' || value === null || !('type' in value)) {
@@ -171,6 +174,12 @@ function isViewMessage(value: unknown): value is ViewMessage {
 
 	if (value.type === ChallengeViewAction.SelectSection) {
 		return 'section' in value && isChallengeSection(value.section);
+	}
+
+	if (value.type === ChallengeViewAction.SelectLevel) {
+		return 'levelNumber' in value
+			&& typeof value.levelNumber === 'number'
+			&& Number.isInteger(value.levelNumber);
 	}
 
 	return typeof value.type === 'string'

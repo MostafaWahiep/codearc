@@ -42,6 +42,7 @@ export class PrototypeSession {
 	private statusBeforeRun: RestorableSessionStatus = SessionStatus.Idle;
 	private testProgress: TestRunProgress | undefined;
 	private latestTestResult: TestRunResult | undefined;
+	private readonly completedLevelResults = new Map<string, TestRunResult>();
 	private generation = 0;
 
 	public constructor(
@@ -64,6 +65,7 @@ export class PrototypeSession {
 			this.statusBeforeRun = SessionStatus.Idle;
 			this.testProgress = undefined;
 			this.latestTestResult = undefined;
+			this.completedLevelResults.clear();
 		} catch (error) {
 			if (generation === this.generation && this.status === SessionStatus.Running) {
 				this.status = this.statusBeforeRun;
@@ -78,6 +80,9 @@ export class PrototypeSession {
 		reportSnapshot?: (snapshot: PrototypeSessionSnapshot) => void,
 	): Promise<PrototypeSessionSnapshot> {
 		const challenge = this.requireChallenge();
+		if (!challenge.isViewingLatestLevel) {
+			throw new Error('Return to the latest level before running checks.');
+		}
 		if (this.status === SessionStatus.Running) {
 			throw new Error('Checks are already running.');
 		}
@@ -120,6 +125,7 @@ export class PrototypeSession {
 		this.latestTestResult = result;
 
 		if (result.passed) {
+			this.completedLevelResults.set(challenge.currentLevel.id, result);
 			this.challenge = this.controller.completeCurrentLevel();
 			this.status = SessionStatus.Passed;
 		} else {
@@ -138,8 +144,21 @@ export class PrototypeSession {
 		return this.getSnapshot();
 	}
 
+	public selectLevel(levelNumber: number): PrototypeSessionSnapshot {
+		if (this.status === SessionStatus.Running) {
+			throw new Error('Wait for the current check run to finish before changing levels.');
+		}
+
+		this.challenge = this.controller.selectLevel(levelNumber);
+		this.activeSection = ChallengeSection.Build;
+		return this.getSnapshot();
+	}
+
 	public beginRefactor(): PrototypeSessionSnapshot {
 		const challenge = this.requireChallenge();
+		if (!challenge.isViewingLatestLevel) {
+			throw new Error('Return to the latest level before refactoring.');
+		}
 		if (!challenge.isCurrentLevelComplete) {
 			throw new Error('Complete the current stage before starting a refactor checkpoint.');
 		}
@@ -165,14 +184,21 @@ export class PrototypeSession {
 	}
 
 	public getSnapshot(): PrototypeSessionSnapshot {
+		const isViewingHistory = this.challenge !== undefined
+			&& !this.challenge.isViewingLatestLevel;
+		const displayedResult = isViewingHistory
+			? this.completedLevelResults.get(this.challenge?.currentLevel.id ?? '')
+			: this.latestTestResult;
+
 		return {
 			challenge: this.challenge,
 			activeSection: this.activeSection,
-			status: this.status,
-			testProgress: this.testProgress,
-			latestTestResult: this.latestTestResult,
+			status: isViewingHistory ? SessionStatus.Passed : this.status,
+			testProgress: isViewingHistory ? undefined : this.testProgress,
+			latestTestResult: displayedResult,
 			isEvolutionUnlocked: this.challenge?.isCurrentLevelComplete ?? false,
 			canRevealNext: Boolean(this.challenge?.canAdvance)
+				&& Boolean(this.challenge?.isViewingLatestLevel)
 				&& this.status === SessionStatus.Passed,
 		};
 	}

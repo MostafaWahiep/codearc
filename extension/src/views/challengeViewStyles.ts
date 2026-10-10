@@ -90,8 +90,18 @@ ul { margin: 8px 0; padding-left: 20px; }
 .progress-step {
 	flex: 1;
 	height: 4px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
 	border-radius: 999px;
 	background: var(--vscode-panel-border);
+}
+
+button.progress-step { cursor: pointer; }
+button.progress-step:hover { filter: brightness(1.25); }
+.progress-step[aria-current='step'] {
+	box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+	transform: scaleY(1.75);
 }
 
 .progress-step-complete { background: var(--vscode-testing-iconPassed); }

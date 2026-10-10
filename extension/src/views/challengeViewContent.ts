@@ -69,23 +69,37 @@ function renderProgress(snapshot: PrototypeSessionSnapshot): string {
 
 	const steps = Array.from({ length: challenge.totalLevels }, (_, index) => {
 		const stage = index + 1;
-		const state = stage < challenge.currentLevelNumber
+		const state = stage < challenge.latestUnlockedLevelNumber
 			? 'complete'
-			: stage === challenge.currentLevelNumber
-				? snapshot.status === SessionStatus.Passed ? 'complete' : 'current'
+			: stage === challenge.latestUnlockedLevelNumber
+				? challenge.isLatestLevelComplete ? 'complete' : 'current'
 				: 'locked';
+		const isSelected = stage === challenge.currentLevelNumber;
+		const label = `Stage ${stage}: ${state}${isSelected ? ', viewing' : ''}`;
+
+		if (stage <= challenge.latestUnlockedLevelNumber) {
+			return `<button
+				class="progress-step progress-step-${state}"
+				type="button"
+				aria-label="${label}"
+				${isSelected ? 'aria-current="step"' : ''}
+				data-action="${ChallengeViewAction.SelectLevel}"
+				data-level-number="${stage}"
+				title="View stage ${stage}"
+			></button>`;
+		}
 
 		return `<span
 			class="progress-step progress-step-${state}"
-			aria-label="Stage ${stage}: ${state}"
+			aria-label="${label}"
+			title="Stage ${stage} is locked"
 		></span>`;
 	}).join('');
 
-	return `<div
+	return `<nav
 		class="progress-track"
-		role="img"
-		aria-label="Stage ${challenge.currentLevelNumber} of ${challenge.totalLevels}"
-	>${steps}</div>`;
+		aria-label="Challenge levels. Viewing stage ${challenge.currentLevelNumber} of ${challenge.totalLevels}."
+	>${steps}</nav>`;
 }
 
 function renderTabs(snapshot: PrototypeSessionSnapshot): string {
@@ -144,29 +158,35 @@ async function renderBuild(
 			<p class="small">Improve the design without changing behavior, then rerun every check before continuing.</p>
 		</div>`
 		: '';
+	const historyNotice = !challenge.isViewingLatestLevel
+		? `<div class="callout" role="status">
+			<strong>Viewing completed stage ${challenge.currentLevelNumber}</strong>
+			<p class="small">This requirement and its evidence are read-only. Your code has continued evolving in stage ${challenge.latestUnlockedLevelNumber}.</p>
+		</div>`
+		: '';
 	const levelSections = await Promise.all(
 		challenge.currentLevel.sections.map((section) =>
 			renderLevelSection(section, markdownRenderer)),
 	);
 
-	return `${refactorNotice}
+	return `${refactorNotice}${historyNotice}
 		<section class="card" aria-labelledby="stage-title">
-			<p class="eyebrow">Current requirement</p>
+			<p class="eyebrow">${challenge.isViewingLatestLevel ? 'Current requirement' : 'Completed requirement'}</p>
 			<h2 id="stage-title">${escapeHtml(challenge.currentLevel.title)}</h2>
-			<div class="requirement-action">
+			${challenge.isViewingLatestLevel ? `<div class="requirement-action">
 				<button class="action action-secondary" type="button" data-action="${ChallengeViewAction.OpenStarter}">Open code in editor</button>
-			</div>
+			</div>` : ''}
 			<div class="level-sections">
 				${levelSections.join('')}
 			</div>
 		</section>
-		<section class="card card-flat locked">
+		${challenge.isViewingLatestLevel && !challenge.isChallengeComplete ? `<section class="card card-flat locked">
 			<span class="lock" aria-hidden="true">◇</span>
 			<div>
 				<strong>Next requirement is hidden</strong>
 				<p class="small muted">It appears only after this stage passes and you review the design tradeoffs.</p>
 			</div>
-		</section>
+		</section>` : ''}
 		${renderTaskAction(snapshot)}`;
 }
 
@@ -192,6 +212,11 @@ async function renderLevelSection(
 }
 
 function renderTaskAction(snapshot: PrototypeSessionSnapshot): string {
+	const challenge = snapshot.challenge;
+	if (challenge && !challenge.isViewingLatestLevel) {
+		return renderReturnToLatestLevel(challenge.latestUnlockedLevelNumber);
+	}
+
 	if (snapshot.status === SessionStatus.Running) {
 		return `<div class="sticky-actions">
 			<button class="action" type="button" disabled>
@@ -255,6 +280,10 @@ function renderEvolutionDecision(snapshot: PrototypeSessionSnapshot): string {
 		return '';
 	}
 
+	if (!challenge.isViewingLatestLevel) {
+		return renderReturnToLatestLevel(challenge.latestUnlockedLevelNumber);
+	}
+
 	if (snapshot.status !== SessionStatus.Passed) {
 		return `<div class="sticky-actions">
 			<button class="action" type="button" data-action="${ChallengeViewAction.SelectSection}" data-section="${ChallengeSection.Build}">Return to current stage</button>
@@ -281,4 +310,15 @@ function renderEvolutionDecision(snapshot: PrototypeSessionSnapshot): string {
 			<button class="action" type="button" data-action="${ChallengeViewAction.Next}" ${snapshot.canRevealNext ? '' : 'disabled'}>Reveal next requirement</button>
 		</div>
 	</section>`;
+}
+
+function renderReturnToLatestLevel(levelNumber: number): string {
+	return `<div class="sticky-actions">
+		<button
+			class="action"
+			type="button"
+			data-action="${ChallengeViewAction.SelectLevel}"
+			data-level-number="${levelNumber}"
+		>Return to stage ${levelNumber}</button>
+	</div>`;
 }
