@@ -6,11 +6,11 @@ import {
 	type PrototypeSessionSnapshot,
 } from '../application/PrototypeSession';
 import { ChallengeViewAction } from './ChallengeViewAction';
+import type { MarkdownRenderer } from './MarkdownRenderer';
 import { renderResults } from './challengeResultsView';
 import {
 	escapeHtml,
 	removeLeadingHeading,
-	renderMarkdown,
 	sectionDomId,
 	statusLabel,
 } from './viewFormatting';
@@ -27,7 +27,10 @@ function renderWelcome(): string {
 		<p class="small muted">Week 1 interactive prototype</p>
 	</main>`;
 }
-export function renderChallenge(snapshot: PrototypeSessionSnapshot): string {
+export async function renderChallenge(
+	snapshot: PrototypeSessionSnapshot,
+	markdownRenderer: MarkdownRenderer,
+): Promise<string> {
 	const challenge = snapshot.challenge;
 	if (!challenge) {
 		return renderWelcome();
@@ -35,6 +38,7 @@ export function renderChallenge(snapshot: PrototypeSessionSnapshot): string {
 
 	const stageLabel = `Stage ${challenge.currentLevelNumber} of ${challenge.totalLevels}`;
 	const activeSectionId = sectionDomId(snapshot.activeSection);
+	const activeSection = await renderActiveSection(snapshot, markdownRenderer);
 
 	return `<main class="shell">
 		<div class="brand"><span class="brand-mark" aria-hidden="true">C</span> CodeArc</div>
@@ -52,7 +56,7 @@ export function renderChallenge(snapshot: PrototypeSessionSnapshot): string {
 			role="tabpanel"
 			aria-labelledby="tab-${activeSectionId}"
 		>
-			${renderActiveSection(snapshot)}
+			${activeSection}
 		</section>
 	</main>`;
 }
@@ -110,19 +114,25 @@ function renderTabs(snapshot: PrototypeSessionSnapshot): string {
 	</nav>`;
 }
 
-function renderActiveSection(snapshot: PrototypeSessionSnapshot): string {
+async function renderActiveSection(
+	snapshot: PrototypeSessionSnapshot,
+	markdownRenderer: MarkdownRenderer,
+): Promise<string> {
 	switch (snapshot.activeSection) {
 		case ChallengeSection.Build:
-			return renderBuild(snapshot);
+			return renderBuild(snapshot, markdownRenderer);
 		case ChallengeSection.Results:
 			return renderResults(snapshot);
 		case ChallengeSection.Design:
-			return renderDesign(snapshot);
+			return renderDesign(snapshot, markdownRenderer);
 	}
 }
 
 
-function renderBuild(snapshot: PrototypeSessionSnapshot): string {
+async function renderBuild(
+	snapshot: PrototypeSessionSnapshot,
+	markdownRenderer: MarkdownRenderer,
+): Promise<string> {
 	const challenge = snapshot.challenge;
 	if (!challenge) {
 		return '';
@@ -134,6 +144,10 @@ function renderBuild(snapshot: PrototypeSessionSnapshot): string {
 			<p class="small">Improve the design without changing behavior, then rerun every check before continuing.</p>
 		</div>`
 		: '';
+	const levelSections = await Promise.all(
+		challenge.currentLevel.sections.map((section) =>
+			renderLevelSection(section, markdownRenderer)),
+	);
 
 	return `${refactorNotice}
 		<section class="card" aria-labelledby="stage-title">
@@ -143,7 +157,7 @@ function renderBuild(snapshot: PrototypeSessionSnapshot): string {
 				<button class="action action-secondary" type="button" data-action="${ChallengeViewAction.OpenStarter}">Open code in editor</button>
 			</div>
 			<div class="level-sections">
-				${challenge.currentLevel.sections.map(renderLevelSection).join('')}
+				${levelSections.join('')}
 			</div>
 		</section>
 		<section class="card card-flat locked">
@@ -156,21 +170,24 @@ function renderBuild(snapshot: PrototypeSessionSnapshot): string {
 		${renderTaskAction(snapshot)}`;
 }
 
-function renderLevelSection(section: LoadedLevelSection): string {
-	const content = renderMarkdown(removeLeadingHeading(section.content));
+async function renderLevelSection(
+	section: LoadedLevelSection,
+	markdownRenderer: MarkdownRenderer,
+): Promise<string> {
+	const content = await markdownRenderer.render(removeLeadingHeading(section.content));
 	const sectionId = `level-section-${section.id}`;
 
 	if (section.display === LevelSectionDisplay.Static) {
 		return `<section class="level-section level-section-static" aria-labelledby="${sectionId}">
 			<h3 id="${sectionId}">${escapeHtml(section.title)}</h3>
-			<div class="level-section-content">${content}</div>
+			<div class="level-section-content markdown-content">${content}</div>
 		</section>`;
 	}
 
 	const isExpanded = section.display === LevelSectionDisplay.Expanded;
 	return `<details class="level-section level-section-collapsible" ${isExpanded ? 'open' : ''}>
 		<summary id="${sectionId}">${escapeHtml(section.title)}</summary>
-		<div class="level-section-content" aria-labelledby="${sectionId}">${content}</div>
+		<div class="level-section-content markdown-content" aria-labelledby="${sectionId}">${content}</div>
 	</details>`;
 }
 
@@ -201,7 +218,10 @@ function renderTaskAction(snapshot: PrototypeSessionSnapshot): string {
 }
 
 
-function renderDesign(snapshot: PrototypeSessionSnapshot): string {
+async function renderDesign(
+	snapshot: PrototypeSessionSnapshot,
+	markdownRenderer: MarkdownRenderer,
+): Promise<string> {
 	const challenge = snapshot.challenge;
 	if (!challenge || !snapshot.isEvolutionUnlocked) {
 		return `<section class="card locked">
@@ -212,6 +232,7 @@ function renderDesign(snapshot: PrototypeSessionSnapshot): string {
 
 	const feedback = challenge.currentLevel.designFeedback ?? '';
 	const waitingForChecks = snapshot.status !== SessionStatus.Passed;
+	const feedbackHtml = await markdownRenderer.render(removeLeadingHeading(feedback));
 
 	return `${waitingForChecks ? `<div class="callout callout-refactor">
 		<strong>Checkpoint still open</strong>
@@ -219,7 +240,7 @@ function renderDesign(snapshot: PrototypeSessionSnapshot): string {
 	</div>` : ''}
 		<section class="card">
 			<p class="eyebrow">Design reflection</p>
-			${renderMarkdown(removeLeadingHeading(feedback))}
+			<div class="markdown-content">${feedbackHtml}</div>
 		</section>
 		<section class="card card-flat">
 			<strong>There is no automatic “best design” here.</strong>

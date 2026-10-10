@@ -154,7 +154,7 @@ ul { margin: 8px 0; padding-left: 20px; }
 .locked { display: flex; gap: 8px; align-items: flex-start; }
 .lock { color: var(--vscode-descriptionForeground); }
 
-.code-block {
+.markdown-content pre {
 	overflow-x: auto;
 	padding: 9px;
 	border-radius: 4px;
@@ -162,6 +162,11 @@ ul { margin: 8px 0; padding-left: 20px; }
 	font-family: var(--vscode-editor-font-family);
 	font-size: var(--vscode-editor-font-size);
 	white-space: pre;
+}
+
+.markdown-content pre code {
+	padding: 0;
+	background: transparent;
 }
 
 code {

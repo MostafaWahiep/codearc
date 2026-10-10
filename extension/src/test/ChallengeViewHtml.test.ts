@@ -12,18 +12,36 @@ import {
 import { renderChallenge } from '../views/challengeViewContent';
 import { createChallengeViewHtml } from '../views/challengeViewHtml';
 import { renderResults } from '../views/challengeResultsView';
+import type { MarkdownRenderer } from '../views/MarkdownRenderer';
+import { escapeHtml } from '../views/viewFormatting';
+
+const markdownRenderer: MarkdownRenderer = {
+	render: async (markdown) => `<div data-rendered-markdown>${escapeHtml(markdown)}</div>`,
+};
 
 suite('Challenge view rendering', () => {
-	test('assembles the welcome document with styles and webview behavior', () => {
-		const html = createChallengeViewHtml(createSnapshot({ challenge: undefined }));
+	test('assembles the welcome document with styles and webview behavior', async () => {
+		const html = await createChallengeViewHtml(
+			createSnapshot({ challenge: undefined }),
+			markdownRenderer,
+			{
+				cspSource: 'https://test.webview.example',
+				markdownHighlightStylesheetUri: 'https://test.webview.example/highlight.css',
+			},
+		);
 
 		assert.match(html, /Content-Security-Policy/);
+		assert.match(html, /style-src 'unsafe-inline' https:\/\/test\.webview\.example/);
+		assert.match(
+			html,
+			/<link rel="stylesheet" href="https:\/\/test\.webview\.example\/highlight\.css">/,
+		);
 		assert.match(html, /<style>[\s\S]*\.welcome/);
 		assert.match(html, /acquireVsCodeApi\(\)/);
 		assert.match(html, /Start search challenge/);
 	});
 
-	test('renders and escapes the current Build requirement', () => {
+	test('renders the current Build requirement with the Markdown renderer', async () => {
 		const snapshot = createSnapshot();
 		if (!snapshot.challenge) {
 			assert.fail('Expected a challenge snapshot.');
@@ -35,10 +53,11 @@ suite('Challenge view rendering', () => {
 			'Find <unsafe> content using `search`.',
 		].join('\n');
 
-		const html = renderChallenge(snapshot);
+		const html = await renderChallenge(snapshot, markdownRenderer);
 
 		assert.match(html, /Stage &lt;One&gt;/);
-		assert.match(html, /Find &lt;unsafe&gt; content using <code>search<\/code>\./);
+		assert.match(html, /Find &lt;unsafe&gt; content using `search`\./);
+		assert.match(html, /data-rendered-markdown/);
 		assert.doesNotMatch(html, /Hidden duplicate title/);
 		assert.match(html, /Open code in editor/);
 		assert.match(html, /<details class="level-section level-section-collapsible" open>/);
@@ -81,16 +100,16 @@ suite('Challenge view rendering', () => {
 		assert.match(html, /1 failed/);
 	});
 
-	test('keeps Design feedback locked until the level passes', () => {
-		const lockedHtml = renderChallenge(createSnapshot({
+	test('keeps Design feedback locked until the level passes', async () => {
+		const lockedHtml = await renderChallenge(createSnapshot({
 			activeSection: ChallengeSection.Design,
-		}));
-		const unlockedHtml = renderChallenge(createSnapshot({
+		}), markdownRenderer);
+		const unlockedHtml = await renderChallenge(createSnapshot({
 			activeSection: ChallengeSection.Design,
 			status: SessionStatus.Passed,
 			isEvolutionUnlocked: true,
 			canRevealNext: true,
-		}));
+		}), markdownRenderer);
 
 		assert.match(lockedHtml, /Design is locked/);
 		assert.doesNotMatch(lockedHtml, /Consider an inverted index/);

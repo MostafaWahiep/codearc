@@ -1,14 +1,23 @@
 import { randomBytes } from 'node:crypto';
 import type { PrototypeSessionSnapshot } from '../application/PrototypeSession';
 import { ChallengeViewAction } from './ChallengeViewAction';
+import type { MarkdownRenderer } from './MarkdownRenderer';
 import { renderChallenge } from './challengeViewContent';
 import { challengeViewStyles } from './challengeViewStyles';
 
-export function createChallengeViewHtml(
+export async function createChallengeViewHtml(
 	snapshot: PrototypeSessionSnapshot,
-): string {
+	markdownRenderer: MarkdownRenderer,
+	resources: ChallengeViewResources = {},
+): Promise<string> {
 	const nonce = randomBytes(16).toString('base64');
-	const body = renderChallenge(snapshot);
+	const body = await renderChallenge(snapshot, markdownRenderer);
+	const styleSource = resources.cspSource
+		? ` ${resources.cspSource}`
+		: '';
+	const markdownHighlightStylesheet = resources.markdownHighlightStylesheetUri
+		? `<link rel="stylesheet" href="${resources.markdownHighlightStylesheetUri}">`
+		: '';
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -16,10 +25,11 @@ export function createChallengeViewHtml(
 	<meta charset="UTF-8">
 	<meta
 		http-equiv="Content-Security-Policy"
-		content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';"
+		content="default-src 'none'; style-src 'unsafe-inline'${styleSource}; script-src 'nonce-${nonce}';"
 	>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>CodeArc</title>
+	${markdownHighlightStylesheet}
 	<style>${challengeViewStyles}</style>
 </head>
 <body>
@@ -27,6 +37,11 @@ export function createChallengeViewHtml(
 	<script nonce="${nonce}">${createChallengeViewScript()}</script>
 </body>
 </html>`;
+}
+
+export interface ChallengeViewResources {
+	readonly cspSource?: string;
+	readonly markdownHighlightStylesheetUri?: string;
 }
 
 function createChallengeViewScript(): string {

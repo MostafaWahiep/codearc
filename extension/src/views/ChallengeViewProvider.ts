@@ -6,6 +6,7 @@ import {
 } from '../application/PrototypeSession';
 import { LearnerWorkspaceService } from '../infrastructure/LearnerWorkspaceService';
 import { ChallengeViewAction } from './ChallengeViewAction';
+import type { MarkdownRenderer } from './MarkdownRenderer';
 import { createChallengeViewHtml } from './challengeViewHtml';
 
 export class ChallengeViewProvider implements vscode.WebviewViewProvider {
@@ -13,22 +14,39 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 
 	private view: vscode.WebviewView | undefined;
 	private snapshot: PrototypeSessionSnapshot;
+	private renderRevision = 0;
+	private markdownHighlightStylesheetUri: string | undefined;
 
 	public constructor(
 		private readonly session: PrototypeSession,
 		private readonly learnerWorkspace: LearnerWorkspaceService,
+		private readonly markdownRenderer: MarkdownRenderer,
 	) {
 		this.snapshot = session.getSnapshot();
 	}
 
 	public resolveWebviewView(view: vscode.WebviewView): void {
 		this.view = view;
-		view.webview.options = { enableScripts: true };
+		const markdownExtension = vscode.extensions.getExtension(
+			'vscode.markdown-language-features',
+		);
+		view.webview.options = {
+			enableScripts: true,
+			localResourceRoots: markdownExtension
+				? [markdownExtension.extensionUri]
+				: [],
+		};
+		this.markdownHighlightStylesheetUri = markdownExtension
+			? view.webview.asWebviewUri(
+				vscode.Uri.joinPath(markdownExtension.extensionUri, 'media', 'highlight.css'),
+			).toString()
+			: undefined;
 		view.webview.onDidReceiveMessage((message: unknown) => {
 			void this.handleMessage(message);
 		});
 		view.onDidDispose(() => {
 			this.view = undefined;
+			this.renderRevision += 1;
 		});
 
 		this.render();
@@ -108,11 +126,29 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private render(): void {
-		if (!this.view) {
+		const view = this.view;
+		if (!view) {
 			return;
 		}
 
-		this.view.webview.html = createChallengeViewHtml(this.snapshot);
+		const revision = ++this.renderRevision;
+		void createChallengeViewHtml(this.snapshot, this.markdownRenderer, {
+			cspSource: view.webview.cspSource,
+			markdownHighlightStylesheetUri: this.markdownHighlightStylesheetUri,
+		})
+			.then((html) => {
+				if (this.view === view && revision === this.renderRevision) {
+					view.webview.html = html;
+				}
+			})
+			.catch((error: unknown) => {
+				if (this.view !== view || revision !== this.renderRevision) {
+					return;
+				}
+
+				const message = error instanceof Error ? error.message : String(error);
+				void vscode.window.showErrorMessage(`CodeArc: ${message}`);
+			});
 	}
 }
 

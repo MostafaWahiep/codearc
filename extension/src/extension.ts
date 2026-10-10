@@ -6,6 +6,7 @@ import { registerStartChallengeCommand } from './commands/startChallenge';
 import { FileChallengeRepository } from './infrastructure/FileChallengeRepository';
 import { LearnerWorkspaceService } from './infrastructure/LearnerWorkspaceService';
 import { MockTestRunner } from './infrastructure/MockTestRunner';
+import { VsCodeMarkdownRenderer } from './infrastructure/VsCodeMarkdownRenderer';
 import { ChallengeViewProvider } from './views/ChallengeViewProvider';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -19,7 +20,12 @@ export function activate(context: vscode.ExtensionContext) {
 	const controller = new ChallengeController(repository);
 	const session = new PrototypeSession(controller, new MockTestRunner());
 	const learnerWorkspace = new LearnerWorkspaceService(context.globalStorageUri);
-	const viewProvider = new ChallengeViewProvider(session, learnerWorkspace);
+	const markdownRenderer = new VsCodeMarkdownRenderer();
+	const viewProvider = new ChallengeViewProvider(
+		session,
+		learnerWorkspace,
+		markdownRenderer,
+	);
 
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
