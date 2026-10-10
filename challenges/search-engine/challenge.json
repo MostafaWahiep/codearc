@@ -8,21 +8,108 @@
     {
       "id": "single-term-search",
       "title": "Level 1: Single-Term Search",
-      "requirementPath": "level-1/requirements.md",
+      "sections": [
+        {
+          "id": "change",
+          "title": "Why this changed",
+          "contentPath": "level-1/change.md",
+          "display": "static"
+        },
+        {
+          "id": "api",
+          "title": "Public API",
+          "contentPath": "level-1/api.md",
+          "display": "expanded"
+        },
+        {
+          "id": "requirements",
+          "title": "What must work",
+          "contentPath": "level-1/requirements.md",
+          "display": "expanded"
+        },
+        {
+          "id": "examples",
+          "title": "Examples",
+          "contentPath": "level-1/examples.md",
+          "display": "collapsed"
+        }
+      ],
       "designFeedbackPath": "level-1/design-feedback.md",
       "testsPath": "level-1/tests"
     },
     {
       "id": "prefix-search",
       "title": "Level 2: Prefix Search",
-      "requirementPath": "level-2/requirements.md",
+      "sections": [
+        {
+          "id": "change",
+          "title": "Why this changed",
+          "contentPath": "level-2/change.md",
+          "display": "static"
+        },
+        {
+          "id": "api",
+          "title": "Public API",
+          "contentPath": "level-2/api.md",
+          "display": "expanded"
+        },
+        {
+          "id": "requirements",
+          "title": "What must work",
+          "contentPath": "level-2/requirements.md",
+          "display": "expanded"
+        },
+        {
+          "id": "examples",
+          "title": "Examples",
+          "contentPath": "level-2/examples.md",
+          "display": "collapsed"
+        },
+        {
+          "id": "regression",
+          "title": "Previous behavior to preserve",
+          "contentPath": "level-2/regression.md",
+          "display": "collapsed"
+        }
+      ],
       "designFeedbackPath": "level-2/design-feedback.md",
       "testsPath": "level-2/tests"
     },
     {
       "id": "phrase-search",
       "title": "Level 3: Phrase Search",
-      "requirementPath": "level-3/requirements.md",
+      "sections": [
+        {
+          "id": "change",
+          "title": "Why this changed",
+          "contentPath": "level-3/change.md",
+          "display": "static"
+        },
+        {
+          "id": "api",
+          "title": "Public API",
+          "contentPath": "level-3/api.md",
+          "display": "expanded"
+        },
+        {
+          "id": "requirements",
+          "title": "What must work",
+          "contentPath": "level-3/requirements.md",
+          "display": "expanded"
+        },
+        {
+          "id": "examples",
+          "title": "Examples",
+          "contentPath": "level-3/examples.md",
+          "display": "collapsed"
+        },
+        {
+          "id": "regression",
+          "title": "Previous behavior to preserve",
+          "contentPath": "level-3/regression.md",
+          "display": "collapsed"
+        }
+      ],
       "designFeedbackPath": "level-3/design-feedback.md",
       "testsPath": "level-3/tests"
     }

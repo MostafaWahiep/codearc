@@ -67,12 +67,19 @@ async function validateChallenge(directoryName) {
 	assertInsideStarter(challengeRoot, manifest.starterPath, manifest.entrypointPath);
 
 	for (const level of manifest.levels) {
-		await assertAsset(
-			challengeRoot,
-			level.requirementPath,
-			'file',
-			`${level.id}.requirementPath`,
-		);
+		const sectionIds = level.sections.map((section) => section.id);
+		if (new Set(sectionIds).size !== sectionIds.length) {
+			throw new Error(`${level.id} section IDs must be unique.`);
+		}
+
+		for (const section of level.sections) {
+			await assertAsset(
+				challengeRoot,
+				section.contentPath,
+				'file',
+				`${level.id}.${section.id}.contentPath`,
+			);
+		}
 		await assertAsset(
 			challengeRoot,
 			level.designFeedbackPath,

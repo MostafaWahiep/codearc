@@ -7,10 +7,23 @@ export interface ChallengeManifest {
 	levels: ChallengeLevelManifest[];
 }
 
+export enum LevelSectionDisplay {
+	Static = 'static',
+	Expanded = 'expanded',
+	Collapsed = 'collapsed',
+}
+
+export interface LevelSectionManifest {
+	id: string;
+	title: string;
+	contentPath: string;
+	display: LevelSectionDisplay;
+}
+
 export interface ChallengeLevelManifest {
 	id: string;
 	title: string;
-	requirementPath: string;
+	sections: LevelSectionManifest[];
 	designFeedbackPath: string;
 	testsPath: string;
 }

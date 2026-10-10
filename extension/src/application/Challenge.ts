@@ -1,11 +1,19 @@
 import type {
 	ChallengeLevelManifest,
 	ChallengeManifest,
+	LevelSectionDisplay,
 } from '@codearc/shared';
+
+export interface LoadedLevelSection {
+	id: string;
+	title: string;
+	display: LevelSectionDisplay;
+	content: string;
+}
 
 export interface LoadedChallengeLevel {
 	manifest: ChallengeLevelManifest;
-	requirement: string;
+	sections: LoadedLevelSection[];
 	designFeedback: string;
 	testsPath: string;
 }

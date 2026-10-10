@@ -1,4 +1,5 @@
 import * as assert from 'node:assert';
+import { LevelSectionDisplay } from '@codearc/shared';
 import type {
 	ChallengeRepository,
 	LoadedChallenge,
@@ -238,11 +239,21 @@ function createChallenge(): LoadedChallenge {
 		manifest: {
 			id,
 			title: `Level ${level}`,
-			requirementPath: `level-${level}/requirements.md`,
+			sections: [{
+				id: 'requirements',
+				title: 'What must work',
+				contentPath: `level-${level}/requirements.md`,
+				display: LevelSectionDisplay.Expanded,
+			}],
 			designFeedbackPath: `level-${level}/design-feedback.md`,
 			testsPath: `level-${level}/tests`,
 		},
-		requirement: `Level ${level} requirement`,
+		sections: [{
+			id: 'requirements',
+			title: 'What must work',
+			display: LevelSectionDisplay.Expanded,
+			content: `Level ${level} requirement`,
+		}],
 		designFeedback: `Level ${level} feedback`,
 		testsPath: `/challenge/level-${level}/tests`,
 		};

@@ -3,7 +3,9 @@ import * as path from 'node:path';
 import type {
 	ChallengeLevelManifest,
 	ChallengeManifest,
+	LevelSectionManifest,
 } from '@codearc/shared';
+import { LevelSectionDisplay } from '@codearc/shared';
 import type {
 	ChallengeRepository,
 	LoadedChallenge,
@@ -22,7 +24,12 @@ export class FileChallengeRepository implements ChallengeRepository {
 		const levels = await Promise.all(
 			manifest.levels.map(async (level): Promise<LoadedChallengeLevel> => ({
 				manifest: level,
-				requirement: await this.readAsset(rootPath, level.requirementPath),
+				sections: await Promise.all(level.sections.map(async (section) => ({
+					id: section.id,
+					title: section.title,
+					display: section.display,
+					content: await this.readAsset(rootPath, section.contentPath),
+				}))),
 				designFeedback: await this.readAsset(rootPath, level.designFeedbackPath),
 				testsPath: resolveAssetPath(rootPath, level.testsPath),
 			})),
@@ -78,17 +85,58 @@ function parseLevel(value: unknown, index: number): ChallengeLevelManifest {
 	const level = requireObject(value, context);
 	assertOnlyKeys(
 		level,
-		['id', 'title', 'requirementPath', 'designFeedbackPath', 'testsPath'],
+		['id', 'title', 'sections', 'designFeedbackPath', 'testsPath'],
 		context,
 	);
+	if (!Array.isArray(level.sections) || level.sections.length === 0) {
+		throw new Error(`Expected ${context} "sections" to be a non-empty array.`);
+	}
+
+	const sections = level.sections.map((section, sectionIndex) =>
+		parseSection(section, sectionIndex, context));
+	const sectionIds = new Set(sections.map((section) => section.id));
+	if (sectionIds.size !== sections.length) {
+		throw new Error(`Expected ${context} section IDs to be unique.`);
+	}
 
 	return {
 		id: requireId(level, 'id', context),
 		title: requireString(level, 'title', context),
-		requirementPath: requireRelativePath(level, 'requirementPath', context),
+		sections,
 		designFeedbackPath: requireRelativePath(level, 'designFeedbackPath', context),
 		testsPath: requireRelativePath(level, 'testsPath', context),
 	};
+}
+
+function parseSection(
+	value: unknown,
+	index: number,
+	levelContext: string,
+): LevelSectionManifest {
+	const context = `${levelContext} section at index ${index}`;
+	const section = requireObject(value, context);
+	assertOnlyKeys(section, ['id', 'title', 'contentPath', 'display'], context);
+
+	return {
+		id: requireId(section, 'id', context),
+		title: requireString(section, 'title', context),
+		contentPath: requireRelativePath(section, 'contentPath', context),
+		display: requireSectionDisplay(section, context),
+	};
+}
+
+function requireSectionDisplay(
+	section: Record<string, unknown>,
+	context: string,
+): LevelSectionDisplay {
+	const display = section.display;
+	if (!Object.values(LevelSectionDisplay).includes(display as LevelSectionDisplay)) {
+		throw new Error(
+			`Expected ${context} "display" to be static, expanded, or collapsed.`,
+		);
+	}
+
+	return display as LevelSectionDisplay;
 }
 
 function requireObject(value: unknown, context: string): Record<string, unknown> {

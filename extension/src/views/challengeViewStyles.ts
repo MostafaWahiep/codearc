@@ -171,6 +171,58 @@ code {
 }
 
 .actions { display: grid; gap: 8px; margin-top: 12px; }
+.requirement-action { margin: 10px 0 16px; }
+
+.level-sections {
+	border-top: 1px solid var(--vscode-panel-border);
+}
+
+.level-section {
+	border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.level-section:last-child { border-bottom: 0; }
+
+.level-section-static { padding: 13px 1px; }
+.level-section-static h3 { margin-top: 0; }
+
+.level-section-collapsible summary {
+	position: relative;
+	padding: 11px 22px 11px 1px;
+	cursor: pointer;
+	font-size: 12px;
+	font-weight: 600;
+	list-style: none;
+}
+
+.level-section-collapsible summary::-webkit-details-marker { display: none; }
+
+.level-section-collapsible summary::after {
+	position: absolute;
+	right: 3px;
+	color: var(--vscode-descriptionForeground);
+	content: '›';
+	font-size: 18px;
+	font-weight: 400;
+	line-height: 1;
+	transform: rotate(90deg);
+	transition: transform 120ms ease-out;
+}
+
+.level-section-collapsible[open] summary::after { transform: rotate(-90deg); }
+
+.level-section-collapsible summary:hover {
+	color: var(--vscode-textLink-foreground);
+}
+
+.level-section-collapsible summary:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+.level-section-content { padding: 0 1px 12px; }
+.level-section-content > :first-child { margin-top: 0; }
+.level-section-content > :last-child { margin-bottom: 0; }
 
 .action {
 	width: 100%;
@@ -185,7 +237,7 @@ code {
 .action:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
 
 .action-secondary {
-	border-color: var(--vscode-button-secondaryBackground);
+	border-color: var(--vscode-panel-border);
 	color: var(--vscode-button-secondaryForeground);
 	background: var(--vscode-button-secondaryBackground);
 }
@@ -259,16 +311,16 @@ code {
 .run-meta {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 4px 10px;
-	margin-top: 5px;
+	gap: 6px;
+	margin-top: 8px;
 	color: var(--vscode-descriptionForeground);
 	font-size: 11px;
 }
 
-.run-meta span + span::before {
-	margin-right: 10px;
-	color: var(--vscode-panel-border);
-	content: '•';
+.run-meta span {
+	padding: 2px 7px;
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 999px;
 }
 
 .test-list { margin: 10px 0 0; padding: 0; list-style: none; }

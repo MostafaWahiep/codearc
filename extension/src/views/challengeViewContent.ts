@@ -1,3 +1,5 @@
+import { LevelSectionDisplay } from '@codearc/shared';
+import type { LoadedLevelSection } from '../application/Challenge';
 import {
 	ChallengeSection,
 	SessionStatus,
@@ -137,11 +139,13 @@ function renderBuild(snapshot: PrototypeSessionSnapshot): string {
 		<section class="card" aria-labelledby="stage-title">
 			<p class="eyebrow">Current requirement</p>
 			<h2 id="stage-title">${escapeHtml(challenge.currentLevel.title)}</h2>
-			${renderMarkdown(removeLeadingHeading(challenge.currentLevel.requirement))}
+			<div class="requirement-action">
+				<button class="action action-secondary" type="button" data-action="${ChallengeViewAction.OpenStarter}">Open code in editor</button>
+			</div>
+			<div class="level-sections">
+				${challenge.currentLevel.sections.map(renderLevelSection).join('')}
+			</div>
 		</section>
-		<div class="actions">
-			<button class="action action-secondary" type="button" data-action="${ChallengeViewAction.OpenStarter}">Open starter code</button>
-		</div>
 		<section class="card card-flat locked">
 			<span class="lock" aria-hidden="true">◇</span>
 			<div>
@@ -150,6 +154,24 @@ function renderBuild(snapshot: PrototypeSessionSnapshot): string {
 			</div>
 		</section>
 		${renderTaskAction(snapshot)}`;
+}
+
+function renderLevelSection(section: LoadedLevelSection): string {
+	const content = renderMarkdown(removeLeadingHeading(section.content));
+	const sectionId = `level-section-${section.id}`;
+
+	if (section.display === LevelSectionDisplay.Static) {
+		return `<section class="level-section level-section-static" aria-labelledby="${sectionId}">
+			<h3 id="${sectionId}">${escapeHtml(section.title)}</h3>
+			<div class="level-section-content">${content}</div>
+		</section>`;
+	}
+
+	const isExpanded = section.display === LevelSectionDisplay.Expanded;
+	return `<details class="level-section level-section-collapsible" ${isExpanded ? 'open' : ''}>
+		<summary id="${sectionId}">${escapeHtml(section.title)}</summary>
+		<div class="level-section-content" aria-labelledby="${sectionId}">${content}</div>
+	</details>`;
 }
 
 function renderTaskAction(snapshot: PrototypeSessionSnapshot): string {

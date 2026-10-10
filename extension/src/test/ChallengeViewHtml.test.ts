@@ -1,4 +1,5 @@
 import * as assert from 'node:assert';
+import { LevelSectionDisplay } from '@codearc/shared';
 import {
 	ChallengeSection,
 	SessionStatus,
@@ -28,7 +29,7 @@ suite('Challenge view rendering', () => {
 			assert.fail('Expected a challenge snapshot.');
 		}
 		snapshot.challenge.currentLevel.title = 'Stage <One>';
-		snapshot.challenge.currentLevel.requirement = [
+		snapshot.challenge.currentLevel.sections[0].content = [
 			'# Hidden duplicate title',
 			'',
 			'Find <unsafe> content using `search`.',
@@ -39,6 +40,11 @@ suite('Challenge view rendering', () => {
 		assert.match(html, /Stage &lt;One&gt;/);
 		assert.match(html, /Find &lt;unsafe&gt; content using <code>search<\/code>\./);
 		assert.doesNotMatch(html, /Hidden duplicate title/);
+		assert.match(html, /Open code in editor/);
+		assert.match(html, /<details class="level-section level-section-collapsible" open>/);
+		assert.match(html, /<summary id="level-section-examples">Examples<\/summary>/);
+		assert.ok(html.indexOf('Public API') < html.indexOf('What must work'));
+		assert.ok(html.indexOf('What must work') < html.indexOf('Examples'));
 		assert.match(html, /Next requirement is hidden/);
 	});
 
@@ -110,7 +116,32 @@ function createSnapshot(
 			currentLevel: {
 				id: 'single-term-search',
 				title: 'Single-term search',
-				requirement: '# Single-term search\n\nFind exact terms.',
+				sections: [
+					{
+						id: 'change',
+						title: 'Why this changed',
+						display: LevelSectionDisplay.Static,
+						content: '# Context\n\nFind exact terms.',
+					},
+					{
+						id: 'api',
+						title: 'Public API',
+						display: LevelSectionDisplay.Expanded,
+						content: '`search(query)`',
+					},
+					{
+						id: 'requirements',
+						title: 'What must work',
+						display: LevelSectionDisplay.Expanded,
+						content: 'Match complete terms.',
+					},
+					{
+						id: 'examples',
+						title: 'Examples',
+						display: LevelSectionDisplay.Collapsed,
+						content: '`search("python")`',
+					},
+				],
 				designFeedback: '# Reflection\n\nConsider an inverted index.',
 				testsPath: '/challenge/level-1/tests',
 			},

@@ -2,12 +2,13 @@ import type {
 	ChallengeRepository,
 	LoadedChallenge,
 	LoadedChallengeLevel,
+	LoadedLevelSection,
 } from './Challenge';
 
 export interface CurrentLevelSnapshot {
 	id: string;
 	title: string;
-	requirement: string;
+	sections: LoadedLevelSection[];
 	designFeedback?: string;
 	testsPath: string;
 }
@@ -88,7 +89,7 @@ export class ChallengeController {
 		return {
 			id: level.manifest.id,
 			title: level.manifest.title,
-			requirement: level.requirement,
+			sections: level.sections,
 			designFeedback: this.isCurrentLevelComplete
 				? level.designFeedback
 				: undefined,

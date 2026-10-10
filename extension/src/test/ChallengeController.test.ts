@@ -1,4 +1,5 @@
 import * as assert from 'node:assert';
+import { LevelSectionDisplay } from '@codearc/shared';
 import type {
 	ChallengeRepository,
 	LoadedChallenge,
@@ -12,6 +13,7 @@ suite('ChallengeController', () => {
 		const snapshot = await controller.start();
 
 		assert.strictEqual(snapshot.currentLevel.id, 'level-one');
+		assert.strictEqual(snapshot.currentLevel.sections[0].content, 'Level one requirement');
 		assert.strictEqual(snapshot.currentLevelNumber, 1);
 		assert.strictEqual(snapshot.totalLevels, 2);
 		assert.strictEqual(snapshot.currentLevel.designFeedback, undefined);
@@ -88,14 +90,14 @@ function createChallenge(): LoadedChallenge {
 				{
 					id: 'level-one',
 					title: 'Level One',
-					requirementPath: 'level-1/requirements.md',
+					sections: [createSectionManifest(1)],
 					designFeedbackPath: 'level-1/design-feedback.md',
 					testsPath: 'level-1/tests',
 				},
 				{
 					id: 'level-two',
 					title: 'Level Two',
-					requirementPath: 'level-2/requirements.md',
+					sections: [createSectionManifest(2)],
 					designFeedbackPath: 'level-2/design-feedback.md',
 					testsPath: 'level-2/tests',
 				},
@@ -109,11 +111,11 @@ function createChallenge(): LoadedChallenge {
 				manifest: {
 					id: 'level-one',
 					title: 'Level One',
-					requirementPath: 'level-1/requirements.md',
+					sections: [createSectionManifest(1)],
 					designFeedbackPath: 'level-1/design-feedback.md',
 					testsPath: 'level-1/tests',
 				},
-				requirement: 'Level one requirement',
+				sections: [createLoadedSection(1)],
 				designFeedback: 'Level one feedback',
 				testsPath: '/challenge/level-1/tests',
 			},
@@ -121,14 +123,32 @@ function createChallenge(): LoadedChallenge {
 				manifest: {
 					id: 'level-two',
 					title: 'Level Two',
-					requirementPath: 'level-2/requirements.md',
+					sections: [createSectionManifest(2)],
 					designFeedbackPath: 'level-2/design-feedback.md',
 					testsPath: 'level-2/tests',
 				},
-				requirement: 'Level two requirement',
+				sections: [createLoadedSection(2)],
 				designFeedback: 'Level two feedback',
 				testsPath: '/challenge/level-2/tests',
 			},
 		],
+	};
+}
+
+function createSectionManifest(level: number) {
+	return {
+		id: 'requirements',
+		title: 'What must work',
+		contentPath: `level-${level}/requirements.md`,
+		display: LevelSectionDisplay.Expanded,
+	};
+}
+
+function createLoadedSection(level: number) {
+	return {
+		id: 'requirements',
+		title: 'What must work',
+		display: LevelSectionDisplay.Expanded,
+		content: `Level ${level === 1 ? 'one' : 'two'} requirement`,
 	};
 }

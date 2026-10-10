@@ -53,7 +53,7 @@
       "required": [
         "id",
         "title",
-        "requirementPath",
+        "sections",
         "designFeedbackPath",
         "testsPath"
       ],
@@ -65,14 +65,47 @@
           "type": "string",
           "minLength": 1
         },
-        "requirementPath": {
-          "$ref": "#/definitions/relativePath"
+        "sections": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/section"
+          }
         },
         "designFeedbackPath": {
           "$ref": "#/definitions/relativePath"
         },
         "testsPath": {
           "$ref": "#/definitions/relativePath"
+        }
+      }
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "contentPath",
+        "display"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contentPath": {
+          "$ref": "#/definitions/relativePath"
+        },
+        "display": {
+          "enum": [
+            "static",
+            "expanded",
+            "collapsed"
+          ]
         }
       }
     }
