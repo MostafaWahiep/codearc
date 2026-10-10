@@ -39,10 +39,13 @@ py*    -> prefix
 
 This allows the Level 1 behavior and tests to remain valid. Extending an interface without silently changing its previous meaning is an important part of evolving software safely.
 
-## Preparing for phrase search
+## Reflection checkpoint
 
-All three prefix-search approaches answer which documents contain matching terms. They do not record where those terms appear.
+The next requirement remains hidden until you choose to continue. For now, review the cost of this change:
 
-For example, an index may show that a document contains both `distributed` and `systems`, but it cannot tell whether the document contains the phrase `distributed systems`. The next level will require preserving term order or term positions during indexing.
+- Did you extend one focused part of the system or touch several responsibilities?
+- Which Level 1 decisions helped you preserve earlier behavior?
+- Did you add complexity for a measured need, or only for a possible future?
+- If you refactored now, what specific evidence would tell you that the refactor paid off later?
 
-Before continuing, consider whether your current index can gain positional information without changing the public API.
+The goal is not to minimize the number of changed lines. The goal is to understand why the change had the shape and cost that it did.

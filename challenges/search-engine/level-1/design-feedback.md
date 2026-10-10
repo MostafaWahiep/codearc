@@ -23,12 +23,13 @@ This makes exact-term lookup fast because the search engine can go directly from
 - Replacing a document must remove its old index entries.
 - Result ordering must be preserved separately from the index.
 
-## Preparing for the next levels
+## Reflection checkpoint
 
-A hash-based inverted index works well when the complete query term is known. Prefix search is different: looking up `pro` does not directly locate keys such as `programming` or `progress`.
+The next requirement is intentionally still hidden. Before revealing it, look at the responsibilities in your current design:
 
-You may decide to scan the indexed vocabulary, keep the vocabulary sorted, or introduce a prefix-oriented structure such as a trie. Each choice trades implementation complexity for faster searches.
+- Which parts are responsible for normalizing and storing documents?
+- Which parts decide how a query is interpreted?
+- What information would be expensive to recover later if you stop storing it now?
+- Which behavior is protected by the public API and existing tests?
 
-Phrase search will add another constraint. Knowing that a document contains `distributed` and `systems` is not enough to prove that the terms occur next to each other in the correct order. Supporting phrases efficiently may require storing term positions, not only document IDs.
-
-Before continuing, consider which parts of your current design can remain unchanged and which parts will need to evolve.
+Do not try to predict every future feature. Instead, identify the assumptions your current design makes and decide whether its present simplicity is worth those constraints.
