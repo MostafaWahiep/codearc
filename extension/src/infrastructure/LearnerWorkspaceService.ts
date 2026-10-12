@@ -6,8 +6,25 @@ export class LearnerWorkspaceService {
 	public constructor(private readonly storageRoot: vscode.Uri) {}
 
 	public async openWorkspace(challenge: ChallengeSnapshot): Promise<void> {
+		const relativeEntrypoint = path.relative(
+			challenge.starterPath,
+			challenge.entrypointPath
+		);
+
+		if (
+			path.isAbsolute(relativeEntrypoint) ||
+			relativeEntrypoint.startsWith(`..${path.sep}`) ||
+			relativeEntrypoint === '..'
+		) {
+			throw new Error('The challenge entrypoint must be inside its starter directory.');
+		}
+
 		const workspacesRoot = vscode.Uri.joinPath(this.storageRoot, 'learner-workspaces');
 		const learnerRoot = vscode.Uri.joinPath(workspacesRoot, challenge.id);
+		const starterFile = vscode.Uri.joinPath(
+			learnerRoot,
+			...relativeEntrypoint.split(path.sep)
+		);
 
 		await vscode.workspace.fs.createDirectory(workspacesRoot);
 		if (!(await uriExists(learnerRoot))) {
@@ -18,21 +35,6 @@ export class LearnerWorkspaceService {
 			);
 		}
 
-		const relativeEntrypoint = path.relative(
-			challenge.starterPath,
-			challenge.entrypointPath,
-		);
-		if (
-			path.isAbsolute(relativeEntrypoint)
-			|| relativeEntrypoint === '..'
-			|| relativeEntrypoint.startsWith(`..${path.sep}`)
-		) {
-			throw new Error('The challenge entrypoint must be inside its starter directory.');
-		}
-		const starterFile = vscode.Uri.joinPath(
-			learnerRoot,
-			...relativeEntrypoint.split(path.sep),
-		);
 		if (!(await uriExists(starterFile))) {
 			throw new Error('The challenge starter entrypoint could not be found.');
 		}
@@ -40,6 +42,7 @@ export class LearnerWorkspaceService {
 		const isAlreadyOpen = vscode.workspace.workspaceFolders?.some(
 			(folder) => folder.uri.toString() === learnerRoot.toString(),
 		) ?? false;
+
 		if (!isAlreadyOpen) {
 			const wasAdded = vscode.workspace.updateWorkspaceFolders(
 				vscode.workspace.workspaceFolders?.length ?? 0,
