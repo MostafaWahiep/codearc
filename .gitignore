@@ -5,3 +5,5 @@ node_modules
 *.vsix
 __pycache__/
 *.py[cod]
+backend/.venv/
+backend/instance/
