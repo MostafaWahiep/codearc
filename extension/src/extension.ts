@@ -15,6 +15,7 @@ export function activate(context: vscode.ExtensionContext) {
 		'..',
 		'challenges',
 		'search-engine',
+		'v1',
 	);
 	const repository = new FileChallengeRepository(challengeRoot);
 	const controller = new ChallengeController(repository);

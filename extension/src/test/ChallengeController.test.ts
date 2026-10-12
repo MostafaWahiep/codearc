@@ -107,6 +107,7 @@ function createChallenge(): LoadedChallenge {
 	return {
 		manifest: {
 			id: 'test-challenge',
+			version: '1',
 			title: 'Test Challenge',
 			description: 'A challenge used by controller tests.',
 			starterPath: 'starter',

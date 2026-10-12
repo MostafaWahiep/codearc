@@ -56,7 +56,7 @@ function parseManifest(value: unknown): ChallengeManifest {
 	const manifest = requireObject(value, 'challenge manifest');
 	assertOnlyKeys(
 		manifest,
-		['id', 'title', 'description', 'starterPath', 'entrypointPath', 'levels'],
+		['id', 'version', 'title', 'description', 'starterPath', 'entrypointPath', 'levels'],
 		'challenge manifest',
 	);
 
@@ -72,12 +72,25 @@ function parseManifest(value: unknown): ChallengeManifest {
 
 	return {
 		id: requireId(manifest, 'id', 'challenge manifest'),
+		version: requireVersion(manifest, 'challenge manifest'),
 		title: requireString(manifest, 'title', 'challenge manifest'),
 		description: requireString(manifest, 'description', 'challenge manifest'),
 		starterPath: requireRelativePath(manifest, 'starterPath', 'challenge manifest'),
 		entrypointPath: requireRelativePath(manifest, 'entrypointPath', 'challenge manifest'),
 		levels,
 	};
+}
+
+function requireVersion(
+	object: Record<string, unknown>,
+	context: string,
+): string {
+	const version = requireString(object, 'version', context);
+	if (!/^[1-9][0-9]*$/.test(version)) {
+		throw new Error(`Expected ${context} "version" to be a positive integer string.`);
+	}
+
+	return version;
 }
 
 function parseLevel(value: unknown, index: number): ChallengeLevelManifest {

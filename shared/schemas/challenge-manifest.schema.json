@@ -5,6 +5,7 @@
   "additionalProperties": false,
   "required": [
     "id",
+    "version",
     "title",
     "description",
     "starterPath",
@@ -14,6 +15,9 @@
   "properties": {
     "id": {
       "$ref": "#/definitions/id"
+    },
+    "version": {
+      "$ref": "#/definitions/version"
     },
     "title": {
       "type": "string",
@@ -41,6 +45,10 @@
     "id": {
       "type": "string",
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
     },
     "relativePath": {
       "type": "string",

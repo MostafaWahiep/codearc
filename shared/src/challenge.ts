@@ -1,5 +1,6 @@
 export interface ChallengeManifest {
 	id: string;
+	version: string;
 	title: string;
 	description: string;
 	starterPath: string;

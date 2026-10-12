@@ -2,6 +2,7 @@
   "id": "search-engine",
   "title": "Build a Search Engine",
   "description": "Build a search engine that evolves from exact term matching to prefix and phrase search.",
+  "version": "1",
   "starterPath": "starter",
   "entrypointPath": "starter/search_engine.py",
   "levels": [

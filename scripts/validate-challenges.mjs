@@ -27,34 +27,81 @@ if (challengeDirectories.length === 0) {
 }
 
 let validationFailed = false;
+let challengePackageCount = 0;
 
-for (const directoryName of challengeDirectories) {
-	try {
-		await validateChallenge(directoryName);
-		console.log(`✓ ${directoryName}`);
-	} catch (error) {
+for (const challengeDirectoryName of challengeDirectories) {
+	const challengeVersionsRoot = path.join(challengesRoot, challengeDirectoryName);
+	const versionDirectories = (
+		await readdir(challengeVersionsRoot, { withFileTypes: true })
+	)
+		.filter((entry) => entry.isDirectory())
+		.map((entry) => entry.name)
+		.sort();
+
+	if (versionDirectories.length === 0) {
 		validationFailed = true;
-		console.error(`✗ ${directoryName}`);
-		console.error(formatError(error));
+		console.error(`✗ ${challengeDirectoryName}`);
+		console.error(`No version directories found in ${challengeVersionsRoot}.`);
+		continue;
+	}
+
+	for (const versionDirectoryName of versionDirectories) {
+		challengePackageCount += 1;
+		const packageLabel = `${challengeDirectoryName}@${versionDirectoryName.slice(1)}`;
+		if (!/^v[1-9][0-9]*$/.test(versionDirectoryName)) {
+			validationFailed = true;
+			console.error(`✗ ${packageLabel}`);
+			console.error('Version directories must use the form v1, v2, and so on.');
+			continue;
+		}
+
+		try {
+			await validateChallenge(challengeDirectoryName, versionDirectoryName);
+			console.log(`✓ ${packageLabel}`);
+		} catch (error) {
+			validationFailed = true;
+			console.error(`✗ ${packageLabel}`);
+			console.error(formatError(error));
+		}
 	}
 }
 
 if (validationFailed) {
 	process.exitCode = 1;
 } else {
-	console.log(`Validated ${challengeDirectories.length} challenge package(s).`);
+	console.log(`Validated ${challengePackageCount} challenge package(s).`);
 }
 
-async function validateChallenge(directoryName) {
-	const challengeRoot = path.join(challengesRoot, directoryName);
+async function validateChallenge(challengeDirectoryName, versionDirectoryName) {
+	const challengeRoot = path.join(
+		challengesRoot,
+		challengeDirectoryName,
+		versionDirectoryName,
+	);
 	const manifestPath = path.join(challengeRoot, 'challenge.json');
 
 	await access(manifestPath);
-	const manifest = await readJson(manifestPath, `${directoryName} manifest`);
+	const manifest = await readJson(
+		manifestPath,
+		`${challengeDirectoryName}@${versionDirectoryName.slice(1)} manifest`,
+	);
 
 	if (!validateManifest(manifest)) {
 		const details = ajv.errorsText(validateManifest.errors, { separator: '\n' });
 		throw new Error(`Manifest does not match the shared schema:\n${details}`);
+	}
+
+	if (manifest.id !== challengeDirectoryName) {
+		throw new Error(
+			`Manifest id must match its challenge directory: ${challengeDirectoryName}`,
+		);
+	}
+
+	const expectedVersion = versionDirectoryName.slice(1);
+	if (manifest.version !== expectedVersion) {
+		throw new Error(
+			`Manifest version must match its version directory: ${expectedVersion}`,
+		);
 	}
 
 	const levelIds = manifest.levels.map((level) => level.id);
