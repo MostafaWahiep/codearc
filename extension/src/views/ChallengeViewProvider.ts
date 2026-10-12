@@ -127,7 +127,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 
 		await this.learnerWorkspace.openWorkspace(challenge);
 		void vscode.window.showInformationMessage(
-			'CodeArc added the learner workspace to Explorer. Your changes will be preserved.',
+			'CodeArc opened the learner folder. Your changes will be preserved.',
 		);
 	}
 

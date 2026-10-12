@@ -44,17 +44,12 @@ export class LearnerWorkspaceService {
 		) ?? false;
 
 		if (!isAlreadyOpen) {
-			const wasAdded = vscode.workspace.updateWorkspaceFolders(
-				vscode.workspace.workspaceFolders?.length ?? 0,
-				0,
-				{
-					uri: learnerRoot,
-					name: `CodeArc: ${challenge.title}`,
-				},
+			await vscode.commands.executeCommand(
+				'vscode.openFolder',
+				learnerRoot,
+				{ forceReuseWindow: true },
 			);
-			if (!wasAdded) {
-				throw new Error('The learner workspace could not be added to VS Code.');
-			}
+			return;
 		}
 
 		const document = await vscode.workspace.openTextDocument(starterFile);
