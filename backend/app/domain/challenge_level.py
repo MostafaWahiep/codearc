@@ -4,7 +4,7 @@ from enum import Enum
 from app.domain.level_section import LevelSection, LevelSectionDefinition
 
 
-class LevelStatus(str, Enum):
+class LevelProgressStatus(str, Enum):
     ACTIVE = "active"
     COMPLETED = "completed"
 
@@ -26,7 +26,7 @@ class VisibleLevel:
 
     id: str
     title: str
-    status: LevelStatus
+    status: LevelProgressStatus
     sections: tuple[LevelSection, ...]
     design_feedback: str | None
 

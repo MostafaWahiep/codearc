@@ -1,5 +1,5 @@
 from app.domain.challenge import ChallengeSummary
-from app.domain.challenge_level import LevelStatus, VisibleLevel
+from app.domain.challenge_level import LevelProgressStatus, VisibleLevel
 from app.repositories.challenge_repository import ChallengeRepository
 
 
@@ -54,7 +54,7 @@ class ChallengeService:
         return VisibleLevel(
             id=level.id,
             title=level.title,
-            status=LevelStatus.ACTIVE,
+            status=LevelProgressStatus.ACTIVE,
             sections=level.sections,
             design_feedback=None,
         )

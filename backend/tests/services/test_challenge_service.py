@@ -4,7 +4,7 @@ from unittest.mock import Mock
 from app.domain.challenge import ChallengeManifest
 from app.domain.challenge_level import (
     ChallengeLevelDefinition,
-    LevelStatus,
+    LevelProgressStatus,
     LoadedChallengeLevel,
 )
 from app.domain.level_section import LevelSection, SectionDisplay
@@ -63,7 +63,7 @@ class ChallengeServiceTests(unittest.TestCase):
 
         self.assertEqual(visible_level.id, "level-1")
         self.assertEqual(visible_level.title, "Level 1")
-        self.assertEqual(visible_level.status, LevelStatus.ACTIVE)
+        self.assertEqual(visible_level.status, LevelProgressStatus.ACTIVE)
         self.assertEqual(visible_level.sections, sections)
         self.assertIsNone(visible_level.design_feedback)
         repository.get_manifest.assert_called_once_with("search-engine", "1")

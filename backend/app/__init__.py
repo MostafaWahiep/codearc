@@ -1,12 +1,12 @@
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 
 from app.api.v1 import api_bp
 from app.config import Config
 from app.container import Container
+from app.extensions import db
+from app.infrastructure.database import attempt_models as _attempt_models
 
-db = SQLAlchemy()
 
 def create_app():
 
