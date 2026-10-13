@@ -2,7 +2,12 @@ import unittest
 from unittest.mock import Mock
 
 from app.domain.challenge import ChallengeManifest
-from app.domain.challenge_level import ChallengeLevelDefinition
+from app.domain.challenge_level import (
+    ChallengeLevelDefinition,
+    LevelStatus,
+    LoadedChallengeLevel,
+)
+from app.domain.level_section import LevelSection, SectionDisplay
 from app.repositories.challenge_repository import ChallengeRepository
 from app.services.challenge_service import ChallengeService
 
@@ -34,6 +39,40 @@ class ChallengeServiceTests(unittest.TestCase):
 
         self.assertEqual(service.list_challenges(), [])
         repository.list_manifests.assert_called_once_with()
+
+    def test_loads_only_the_first_level_as_active(self) -> None:
+        repository = Mock(spec=ChallengeRepository)
+        manifest = self._manifest("search-engine", "1", level_count=3)
+        sections = (
+            LevelSection(
+                id="api",
+                title="Public API",
+                content="## API",
+                display=SectionDisplay.EXPANDED,
+            ),
+        )
+        repository.get_manifest.return_value = manifest
+        repository.load_level.return_value = LoadedChallengeLevel(
+            id="level-1",
+            title="Level 1",
+            sections=sections,
+        )
+        service = ChallengeService(repository)
+
+        visible_level = service.load_first_level("search-engine", "1")
+
+        self.assertEqual(visible_level.id, "level-1")
+        self.assertEqual(visible_level.title, "Level 1")
+        self.assertEqual(visible_level.status, LevelStatus.ACTIVE)
+        self.assertEqual(visible_level.sections, sections)
+        self.assertIsNone(visible_level.design_feedback)
+        repository.get_manifest.assert_called_once_with("search-engine", "1")
+        repository.load_level.assert_called_once_with(
+            "search-engine",
+            "1",
+            "level-1",
+        )
+        repository.load_design_feedback.assert_not_called()
 
     @staticmethod
     def _manifest(

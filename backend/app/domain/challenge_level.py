@@ -1,6 +1,12 @@
 from dataclasses import dataclass
+from enum import Enum
 
 from app.domain.level_section import LevelSection, LevelSectionDefinition
+
+
+class LevelStatus(str, Enum):
+    ACTIVE = "active"
+    COMPLETED = "completed"
 
 
 @dataclass(frozen=True)
@@ -20,12 +26,15 @@ class VisibleLevel:
 
     id: str
     title: str
-    status: str
+    status: LevelStatus
     sections: tuple[LevelSection, ...]
     design_feedback: str | None
 
+
 @dataclass(frozen=True)
 class LoadedChallengeLevel:
+    """Level content loaded from a challenge package before visibility rules."""
+
     id: str
     title: str
     sections: tuple[LevelSection, ...]

@@ -1,4 +1,5 @@
 from app.domain.challenge import ChallengeSummary
+from app.domain.challenge_level import LevelStatus, VisibleLevel
 from app.repositories.challenge_repository import ChallengeRepository
 
 
@@ -31,3 +32,29 @@ class ChallengeService:
                 key=lambda item: item.id,
             )
         ]
+
+    def load_first_level(
+        self,
+        challenge_id: str,
+        version: str,
+    ) -> VisibleLevel:
+        manifest = self._challenge_repository.get_manifest(
+            challenge_id,
+            version,
+        )
+
+        first_level = manifest.levels[0]
+
+        level = self._challenge_repository.load_level(
+            challenge_id,
+            version,
+            first_level.id,
+        )
+
+        return VisibleLevel(
+            id=level.id,
+            title=level.title,
+            status=LevelStatus.ACTIVE,
+            sections=level.sections,
+            design_feedback=None,
+        )
