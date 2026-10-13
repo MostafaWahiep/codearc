@@ -11,6 +11,7 @@ from app.infrastructure.file_challenge_repository import (
     InvalidChallengePackage,
 )
 from app.domain.level_section import SectionDisplay
+from app.repositories.challenge_repository import ChallengeNotFound
 from app.validation.manifest_validator import ManifestValidator
 
 
@@ -49,6 +50,29 @@ class FileChallengeRepositoryTests(unittest.TestCase):
 
         with self.assertRaises(ChallengeReleaseNotFound):
             repository.get_manifest("search-engine", "1")
+
+    def test_returns_latest_numeric_release_for_challenge(self) -> None:
+        self._write_manifest("search-engine", "2")
+        self._write_manifest("message-queue", "20")
+        self._write_manifest("search-engine", "10")
+        self._write_manifest("search-engine", "9")
+        repository = FileChallengeRepository(
+            challenges_root=self.challenges_root,
+            validator=self.validator,
+        )
+
+        latest = repository.get_latest_manifest("search-engine")
+
+        self.assertEqual(latest.version, "10")
+
+    def test_unknown_challenge_has_no_latest_release(self) -> None:
+        repository = FileChallengeRepository(
+            challenges_root=self.challenges_root,
+            validator=self.validator,
+        )
+
+        with self.assertRaisesRegex(ChallengeNotFound, "unknown"):
+            repository.get_latest_manifest("unknown")
 
     def test_loads_requested_level_sections_in_manifest_order(self) -> None:
         self._write_manifest(

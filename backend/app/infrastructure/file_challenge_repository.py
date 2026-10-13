@@ -9,6 +9,7 @@ from app.domain.challenge_level import (
 )
 from app.domain.level_section import LevelSection
 from app.infrastructure.challenge_manifest_mapper import map_challenge_manifest
+from app.repositories.challenge_repository import ChallengeNotFound
 from app.validation.manifest_validator import (
     InvalidChallengeManifest,
     ManifestValidator,
@@ -60,6 +61,25 @@ class FileChallengeRepository:
             raise ChallengeReleaseNotFound(
                 f"Challenge release '{challenge_id}' version '{version}' was not found"
             ) from error
+
+    def get_latest_manifest(
+        self,
+        challenge_id: str,
+    ) -> ChallengeManifest:
+        manifest = max(
+            (
+                manifest
+                for manifest in self._manifests.values()
+                if manifest.id == challenge_id
+            ),
+            key=lambda item: int(item.version),
+            default=None,
+        )
+
+        if manifest is None:
+            raise ChallengeNotFound(challenge_id)
+
+        return manifest
 
     def load_level(
         self,

@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 from app.domain.challenge import ChallengeManifest
 from app.domain.challenge_level import (
@@ -18,8 +18,10 @@ class ChallengeServiceTests(unittest.TestCase):
         repository.list_manifests.return_value = (
             self._manifest("search-engine", "2", level_count=2),
             self._manifest("message-queue", "1", level_count=1),
+        )
+        repository.get_latest_manifest.side_effect = (
+            self._manifest("message-queue", "1", level_count=1),
             self._manifest("search-engine", "10", level_count=3),
-            self._manifest("search-engine", "9", level_count=1),
         )
         service = ChallengeService(repository)
 
@@ -31,6 +33,13 @@ class ChallengeServiceTests(unittest.TestCase):
         )
         self.assertEqual(summaries[1].level_count, 3)
         repository.list_manifests.assert_called_once_with()
+        self.assertEqual(
+            repository.get_latest_manifest.call_args_list,
+            [
+                call("message-queue"),
+                call("search-engine"),
+            ],
+        )
 
     def test_returns_empty_list_when_catalog_is_empty(self) -> None:
         repository = Mock(spec=ChallengeRepository)
