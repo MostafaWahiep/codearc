@@ -3,7 +3,11 @@ import re
 from pathlib import Path
 
 from app.domain.challenge import ChallengeManifest
-from app.domain.challenge_level import LoadedChallengeLevel
+from app.domain.challenge_level import (
+    ChallengeLevelDefinition,
+    LoadedChallengeLevel,
+)
+from app.domain.level_section import LevelSection
 from app.infrastructure.challenge_manifest_mapper import map_challenge_manifest
 from app.validation.manifest_validator import (
     InvalidChallengeManifest,
@@ -20,6 +24,10 @@ class InvalidChallengePackage(ValueError):
 
 
 class ChallengeReleaseNotFound(LookupError):
+    pass
+
+
+class ChallengeLevelNotFound(LookupError):
     pass
 
 
@@ -59,7 +67,16 @@ class FileChallengeRepository:
         version: str,
         level_id: str,
     ) -> LoadedChallengeLevel:
-        raise NotImplementedError("Challenge level loading is not implemented yet")
+        manifest = self.get_manifest(challenge_id, version)
+
+        level_definition = self._get_level_definition(manifest, level_id)
+        sections = self._load_sections(manifest, level_definition)
+
+        return LoadedChallengeLevel(
+            id=level_definition.id,
+            title=level_definition.title,
+            sections=sections,
+        )
 
     def load_design_feedback(
         self,
@@ -67,7 +84,18 @@ class FileChallengeRepository:
         version: str,
         level_id: str,
     ) -> str:
-        raise NotImplementedError("Design feedback loading is not implemented yet")
+        manifest = self.get_manifest(challenge_id, version)
+        level_definition = self._get_level_definition(manifest, level_id)
+
+        challenge_path = self._challenges_root.joinpath(
+            manifest.id,
+            f"v{manifest.version}",
+        )
+
+        return self._read_package_text(
+            challenge_path,
+            level_definition.design_feedback_path,
+        )
 
     def _load_manifests(self) -> dict[tuple[str, str], ChallengeManifest]:
         if not self._challenges_root.is_dir():
@@ -125,3 +153,77 @@ class FileChallengeRepository:
             )
 
         return manifest
+
+    def _get_level_definition(
+        self,
+        manifest: ChallengeManifest,
+        level_id: str,
+    ) -> ChallengeLevelDefinition:
+        level_definitions = [
+            level for level in manifest.levels if level.id == level_id
+        ]
+
+        if not level_definitions:
+            raise ChallengeLevelNotFound(
+                f"Level '{level_id}' was not found in challenge "
+                f"'{manifest.id}' version '{manifest.version}'"
+            )
+
+        if len(level_definitions) > 1:
+            raise InvalidChallengePackage(
+                f"Duplicate level id '{level_id}' in challenge "
+                f"'{manifest.id}' version '{manifest.version}'"
+            )
+
+        return level_definitions[0]
+
+    def _load_sections(
+        self,
+        manifest: ChallengeManifest,
+        level: ChallengeLevelDefinition,
+    ) -> tuple[LevelSection, ...]:
+        challenge_path = self._challenges_root.joinpath(
+            manifest.id,
+            f"v{manifest.version}",
+        )
+
+        return tuple(
+            LevelSection(
+                id=section.id,
+                title=section.title,
+                content=self._read_package_text(
+                    challenge_path,
+                    section.content_path,
+                ),
+                display=section.display,
+            )
+            for section in level.sections
+        )
+
+    def _read_package_text(
+        self,
+        challenge_path: Path,
+        relative_path: str,
+    ) -> str:
+        resolved_root = challenge_path.resolve()
+        file_path = (resolved_root / relative_path).resolve()
+
+        try:
+            file_path.relative_to(resolved_root)
+        except ValueError as error:
+            raise InvalidChallengePackage(
+                f"Path '{relative_path}' points outside "
+                f"challenge package '{resolved_root}'"
+            ) from error
+
+        if not file_path.is_file():
+            raise InvalidChallengePackage(
+                f"Challenge content file does not exist: {file_path}"
+            )
+
+        try:
+            return file_path.read_text(encoding="utf-8")
+        except OSError as error:
+            raise InvalidChallengePackage(
+                f"Could not read challenge content file: {file_path}"
+            ) from error
