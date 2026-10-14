@@ -1,0 +1,105 @@
+from uuid import UUID
+
+from dependency_injector.wiring import Provide, inject
+from flask import Blueprint, jsonify, request
+
+from app.container import Container
+from app.domain.attempt import Attempt
+from app.repositories.attempt_repository import AttemptNotFound
+from app.repositories.challenge_repository import ChallengeNotFound
+from app.services.attempt_service import AttemptService
+
+
+attempt_bp = Blueprint("attempt", __name__, url_prefix="/attempts")
+
+
+def _serialize_attempt(attempt: Attempt) -> dict:
+    return {
+        "id": attempt.id,
+        "userId": attempt.user_id,
+        "challengeId": attempt.challenge_id,
+        "version": attempt.challenge_version,
+        "status": attempt.status.value,
+        "startedAt": attempt.started_at.isoformat(),
+        "updatedAt": attempt.updated_at.isoformat(),
+        "completedAt": (
+            attempt.completed_at.isoformat() if attempt.completed_at else None
+        ),
+        "activeLevelId": attempt.active_level_id,
+        "levels": [
+            {
+                "levelId": level.level_id,
+                "status": level.status.value,
+                "submissionCount": level.submission_count,
+                "completedAt": (
+                    level.completed_at.isoformat() if level.completed_at else None
+                ),
+            }
+            for level in attempt.levels
+        ],
+    }
+
+
+@attempt_bp.post("/")
+@inject
+def start_attempt(
+    attempt_service: AttemptService = Provide[Container.attempt_service],
+):
+    try:
+        body = request.get_json(silent=True)
+
+        if not isinstance(body, dict):
+            return jsonify({
+                "message": "Request body must be a JSON object",
+            }), 400
+
+        user_id = body.get("userId")
+        challenge_id = body.get("challengeId")
+
+        if (
+            not isinstance(user_id, str)
+            or not user_id.strip()
+            or not isinstance(challenge_id, str)
+            or not challenge_id.strip()
+        ):
+            return jsonify({
+                "message": "userId and challengeId are required strings",
+            }), 400
+
+        try:
+            parsed_user_id = UUID(user_id)
+        except ValueError:
+            return jsonify({
+                "message": "userId must be a valid UUID",
+            }), 400
+
+        attempt = attempt_service.start_attempt(
+            user_id=parsed_user_id,
+            challenge_id=challenge_id,
+        )
+
+        return jsonify(_serialize_attempt(attempt)), 201
+
+    except ChallengeNotFound as error:
+        return jsonify({
+            "message": str(error),
+        }), 404
+
+
+@attempt_bp.get("/<uuid:attempt_id>")
+@inject
+def resume_attempt(
+    attempt_id: UUID,
+    attempt_service: AttemptService = Provide[Container.attempt_service],
+):
+    try:
+        attempt = attempt_service.get_attempt(
+            attempt_id=attempt_id,
+        )
+
+        return jsonify(_serialize_attempt(attempt)), 200
+
+    except AttemptNotFound as error:
+        return jsonify({
+            "message": str(error),
+        }), 404

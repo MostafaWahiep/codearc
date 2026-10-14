@@ -9,7 +9,7 @@ from app.domain.challenge_level import (
 )
 from app.domain.level_section import LevelSection
 from app.infrastructure.challenge_manifest_mapper import map_challenge_manifest
-from app.repositories.challenge_repository import ChallengeNotFound
+from app.repositories.challenge_repository import ChallengeNotFound, ChallengeRepository
 from app.validation.manifest_validator import (
     InvalidChallengeManifest,
     ManifestValidator,
@@ -32,7 +32,7 @@ class ChallengeLevelNotFound(LookupError):
     pass
 
 
-class FileChallengeRepository:
+class FileChallengeRepository(ChallengeRepository):
     def __init__(
         self,
         challenges_root: Path,
