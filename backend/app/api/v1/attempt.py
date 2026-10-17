@@ -5,9 +5,14 @@ from flask import Blueprint, jsonify, request
 
 from app.container import Container
 from app.domain.attempt import Attempt
+from app.domain.challenge_level import VisibleLevel
 from app.repositories.attempt_repository import AttemptNotFound
 from app.repositories.challenge_repository import ChallengeNotFound
-from app.services.attempt_service import AttemptService
+from app.services.attempt_service import (
+    AttemptHasNoActiveLevel,
+    AttemptLevelNotVisible,
+    AttemptService,
+)
 
 
 attempt_bp = Blueprint("attempt", __name__, url_prefix="/attempts")
@@ -51,6 +56,24 @@ def _serialize_attempt_summary(attempt: Attempt) -> dict:
         "completedAt": (
             attempt.completed_at.isoformat() if attempt.completed_at else None
         ),
+    }
+
+
+def _serialize_visible_level(level: VisibleLevel) -> dict:
+    return {
+        "id": level.id,
+        "title": level.title,
+        "status": level.status.value,
+        "sections": [
+            {
+                "id": section.id,
+                "title": section.title,
+                "content": section.content,
+                "display": section.display.value,
+            }
+            for section in level.sections
+        ],
+        "designFeedback": level.design_feedback,
     }
 
 
@@ -146,3 +169,23 @@ def get_attempt(
         return jsonify({
             "message": str(error),
         }), 404
+
+
+@attempt_bp.get("/<uuid:attempt_id>/level")
+@inject
+def get_active_level_in_attempt(
+    attempt_id: UUID,
+    attempt_service: AttemptService = Provide[Container.attempt_service],
+):
+    try:
+        level = attempt_service.get_active_level(attempt_id=attempt_id)
+
+        return jsonify(_serialize_visible_level(level)), 200
+    except AttemptNotFound as error:
+        return jsonify({
+            "message": str(error),
+        }), 404
+    except (AttemptLevelNotVisible) as error:
+        return jsonify({
+            "message": str(error),
+        }), 409

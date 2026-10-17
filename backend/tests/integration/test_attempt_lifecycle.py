@@ -76,6 +76,18 @@ class AttemptLifecycleIntegrationTests(unittest.TestCase):
         self.assertEqual(retrieve_response.status_code, 200)
         self.assertEqual(retrieve_response.get_json(), started_attempt)
 
+        level_response = self.client.get(
+            f"/api/v1/attempts/{started_attempt['id']}/level"
+        )
+
+        self.assertEqual(level_response.status_code, 200)
+        visible_level = level_response.get_json()
+        self.assertEqual(visible_level["id"], started_attempt["activeLevelId"])
+        self.assertEqual(visible_level["status"], "active")
+        self.assertGreater(len(visible_level["sections"]), 0)
+        self.assertIsNone(visible_level["designFeedback"])
+        self.assertNotIn("levels", visible_level)
+
 
 if __name__ == "__main__":
     unittest.main()

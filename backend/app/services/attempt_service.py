@@ -3,9 +3,17 @@ from typing import Callable
 from uuid import UUID
 
 from app.domain.attempt import Attempt, AttemptStatus, LevelProgress
-from app.domain.challenge_level import LevelProgressStatus
+from app.domain.challenge_level import LevelProgressStatus, VisibleLevel
 from app.repositories.attempt_repository import AttemptNotFound, AttemptRepository
 from app.repositories.challenge_repository import ChallengeRepository
+
+class AttemptLevelNotVisible(LookupError):
+    def __init__(self, attempt_id: UUID, level_id: str) -> None:
+        super().__init__(
+            f"Level '{level_id}' is not visible in attempt '{attempt_id}'"
+        )
+        self.attempt_id = attempt_id
+        self.level_id = level_id
 
 
 class AttemptService:
@@ -65,6 +73,74 @@ class AttemptService:
         return self._attempt_repository.find_by_user_and_challenge(
             user_id,
             challenge_id,
+        )
+
+    def get_active_level(
+        self,
+        attempt_id: UUID,
+    ) -> VisibleLevel:
+        attempt = self.get_attempt(attempt_id)
+
+        return self._build_visible_level(
+            attempt,
+            attempt.active_level_id,
+        )
+
+    def get_visible_level(
+        self,
+        attempt_id: UUID,
+        level_id: str,
+    ) -> VisibleLevel:
+        attempt = self.get_attempt(attempt_id)
+
+        return self._build_visible_level(attempt, level_id)
+
+    def _build_visible_level(
+        self,
+        attempt: Attempt,
+        level_id: str,
+    ) -> VisibleLevel:
+
+        level_progress = next(
+            (
+                level
+                for level in attempt.levels
+                if (
+                    level.level_id == level_id
+                    and level.status
+                    in (
+                        LevelProgressStatus.COMPLETED,
+                        LevelProgressStatus.ACTIVE,
+                    )
+                )
+            ),
+            None,
+        )
+
+        if level_progress is None:
+            raise AttemptLevelNotVisible(attempt.id, level_id)
+
+        level = self._challenge_repository.load_level(
+            attempt.challenge_id,
+            attempt.challenge_version,
+            level_id,
+        )
+
+        design_feedback = None
+
+        if level_progress.status == LevelProgressStatus.COMPLETED:
+            design_feedback = self._challenge_repository.load_design_feedback(
+                attempt.challenge_id,
+                attempt.challenge_version,
+                level_id,
+            )
+
+        return VisibleLevel(
+            id=level_id,
+            title=level.title,
+            status=level_progress.status,
+            sections=level.sections,
+            design_feedback=design_feedback,
         )
 
     def _create_new_level_progress(

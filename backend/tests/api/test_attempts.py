@@ -5,10 +5,11 @@ from uuid import UUID
 
 from app import create_app
 from app.domain.attempt import Attempt, AttemptStatus, LevelProgress
-from app.domain.challenge_level import LevelProgressStatus
+from app.domain.challenge_level import LevelProgressStatus, VisibleLevel
+from app.domain.level_section import LevelSection, SectionDisplay
 from app.repositories.attempt_repository import AttemptNotFound
 from app.repositories.challenge_repository import ChallengeNotFound
-from app.services.attempt_service import AttemptService
+from app.services.attempt_service import AttemptHasNoActiveLevel, AttemptService
 
 
 USER_ID = UUID("11111111-1111-4111-8111-111111111111")
@@ -263,6 +264,77 @@ class AttemptEndpointTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.service.get_attempt.assert_not_called()
+
+    def test_returns_the_active_level_with_ordered_sections(self) -> None:
+        self.service.get_active_level.return_value = VisibleLevel(
+            id="single-term-search",
+            title="Level 1: Single-Term Search",
+            status=LevelProgressStatus.ACTIVE,
+            sections=(
+                LevelSection(
+                    id="api",
+                    title="Public API",
+                    content="## SearchEngine",
+                    display=SectionDisplay.EXPANDED,
+                ),
+                LevelSection(
+                    id="requirements",
+                    title="What must work",
+                    content="Search exact terms.",
+                    display=SectionDisplay.COLLAPSED,
+                ),
+            ),
+            design_feedback=None,
+        )
+
+        with self.app.container.attempt_service.override(self.service):
+            response = self.client.get(
+                f"/api/v1/attempts/{ATTEMPT_ID}/level"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json(),
+            {
+                "id": "single-term-search",
+                "title": "Level 1: Single-Term Search",
+                "status": "active",
+                "sections": [
+                    {
+                        "id": "api",
+                        "title": "Public API",
+                        "content": "## SearchEngine",
+                        "display": "expanded",
+                    },
+                    {
+                        "id": "requirements",
+                        "title": "What must work",
+                        "content": "Search exact terms.",
+                        "display": "collapsed",
+                    },
+                ],
+                "designFeedback": None,
+            },
+        )
+        self.service.get_active_level.assert_called_once_with(
+            attempt_id=ATTEMPT_ID,
+        )
+
+    def test_returns_conflict_when_attempt_has_no_active_level(self) -> None:
+        self.service.get_active_level.side_effect = AttemptHasNoActiveLevel(
+            ATTEMPT_ID
+        )
+
+        with self.app.container.attempt_service.override(self.service):
+            response = self.client.get(
+                f"/api/v1/attempts/{ATTEMPT_ID}/level"
+            )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.get_json(),
+            {"message": f"Attempt '{ATTEMPT_ID}' has no active level"},
+        )
 
 
 if __name__ == "__main__":

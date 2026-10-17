@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 from datetime import datetime, timezone
 from unittest.mock import Mock
 from uuid import uuid4
@@ -8,10 +9,16 @@ from app.domain.challenge import ChallengeManifest
 from app.domain.challenge_level import (
     ChallengeLevelDefinition,
     LevelProgressStatus,
+    LoadedChallengeLevel,
 )
+from app.domain.level_section import LevelSection, SectionDisplay
 from app.repositories.attempt_repository import AttemptNotFound, AttemptRepository
 from app.repositories.challenge_repository import ChallengeRepository
-from app.services.attempt_service import AttemptService
+from app.services.attempt_service import (
+    AttemptHasNoActiveLevel,
+    AttemptLevelNotVisible,
+    AttemptService,
+)
 
 
 class AttemptServiceTests(unittest.TestCase):
@@ -81,6 +88,75 @@ class AttemptServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(AttemptNotFound, str(attempt_id)):
             self.service.get_attempt(attempt_id)
 
+    def test_loads_only_the_active_level_from_the_pinned_release(self) -> None:
+        attempt = self._attempt()
+        sections = self._sections()
+        self.attempt_repository.get_by_id.return_value = attempt
+        self.challenge_repository.load_level.return_value = LoadedChallengeLevel(
+            id="single-term-search",
+            title="Level 1",
+            sections=sections,
+        )
+
+        level = self.service.get_active_level(attempt.id)
+
+        self.assertEqual(level.id, "single-term-search")
+        self.assertEqual(level.status, LevelProgressStatus.ACTIVE)
+        self.assertEqual(level.sections, sections)
+        self.assertIsNone(level.design_feedback)
+        self.challenge_repository.load_level.assert_called_once_with(
+            "search-engine",
+            "10",
+            "single-term-search",
+        )
+        self.challenge_repository.load_design_feedback.assert_not_called()
+
+    def test_reveals_design_feedback_for_a_completed_visible_level(self) -> None:
+        attempt = self._attempt()
+        completed_progress = replace(
+            attempt.levels[0],
+            status=LevelProgressStatus.COMPLETED,
+            completed_at=self.now,
+        )
+        attempt = replace(attempt, levels=(completed_progress,))
+        self.attempt_repository.get_by_id.return_value = attempt
+        self.challenge_repository.load_level.return_value = LoadedChallengeLevel(
+            id="single-term-search",
+            title="Level 1",
+            sections=self._sections(),
+        )
+        self.challenge_repository.load_design_feedback.return_value = (
+            "## Design feedback"
+        )
+
+        level = self.service.get_active_level(attempt.id)
+
+        self.assertEqual(level.status, LevelProgressStatus.COMPLETED)
+        self.assertEqual(level.design_feedback, "## Design feedback")
+        self.challenge_repository.load_design_feedback.assert_called_once_with(
+            "search-engine",
+            "10",
+            "single-term-search",
+        )
+
+    def test_rejects_a_level_that_is_not_visible_in_the_attempt(self) -> None:
+        attempt = self._attempt()
+        self.attempt_repository.get_by_id.return_value = attempt
+
+        with self.assertRaisesRegex(AttemptLevelNotVisible, "prefix-search"):
+            self.service.get_visible_level(attempt.id, "prefix-search")
+
+        self.challenge_repository.load_level.assert_not_called()
+
+    def test_reports_when_an_attempt_has_no_active_level(self) -> None:
+        attempt = replace(self._attempt(), active_level_id=None)
+        self.attempt_repository.get_by_id.return_value = attempt
+
+        with self.assertRaisesRegex(AttemptHasNoActiveLevel, str(attempt.id)):
+            self.service.get_active_level(attempt.id)
+
+        self.challenge_repository.load_level.assert_not_called()
+
     @staticmethod
     def _manifest() -> ChallengeManifest:
         return ChallengeManifest(
@@ -105,6 +181,17 @@ class AttemptServiceTests(unittest.TestCase):
         self.challenge_repository.get_latest_manifest.return_value = self._manifest()
         self.attempt_repository.add.side_effect = lambda attempt: attempt
         return self.service.start_attempt(uuid4(), "search-engine")
+
+    @staticmethod
+    def _sections() -> tuple[LevelSection, ...]:
+        return (
+            LevelSection(
+                id="api",
+                title="Public API",
+                content="## API",
+                display=SectionDisplay.EXPANDED,
+            ),
+        )
 
 
 if __name__ == "__main__":
