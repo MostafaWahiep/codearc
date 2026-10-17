@@ -4,6 +4,7 @@ import {
 	AttemptCatalogStatus,
 	type AttemptCatalogSnapshot,
 } from '../application/AttemptCatalog';
+import type { AttemptSessionSnapshot } from '../application/AttemptSession';
 import {
 	ChallengeCatalogStatus,
 	type ChallengeCatalogSnapshot,
@@ -94,6 +95,26 @@ suite('Challenge view rendering', () => {
 		assert.match(html, /data-attempt-id="22222222-2222-4222-8222-222222222222"/);
 		assert.match(html, /data-action="startNewAttempt"/);
 		assert.match(html, /Start new attempt/);
+	});
+
+	test('renders backend requirement content and only visible level navigation', async () => {
+		const html = await renderChallenge(
+			createSnapshot({ challenge: undefined }),
+			markdownRenderer,
+			createCatalogSnapshot(),
+			undefined,
+			createAttemptSessionSnapshot(),
+		);
+
+		assert.match(html, /Build a Search Engine/);
+		assert.match(html, /Prefix Search/);
+		assert.match(html, /Add prefix matching from the backend./);
+		assert.match(html, /data-level-id="single-term-search"/);
+		assert.match(html, /data-level-id="prefix-search"/);
+		assert.doesNotMatch(html, /data-level-id="phrase-search"/);
+		assert.match(html, /Stage 3 is locked/);
+		assert.match(html, /Design · Locked/);
+		assert.doesNotMatch(html, /Open challenge folder/);
 	});
 
 	test('renders current and regression failures in Results', () => {
@@ -197,6 +218,52 @@ function createAttemptCatalogSnapshot(): AttemptCatalogSnapshot {
 				activeLevelId: 'single-term-search',
 			},
 		],
+	};
+}
+
+function createAttemptSessionSnapshot(): AttemptSessionSnapshot {
+	return {
+		challenge: createCatalogSnapshot().challenges[0],
+		attempt: {
+			id: '22222222-2222-4222-8222-222222222222',
+			userId: '11111111-1111-4111-8111-111111111111',
+			challengeId: 'search-engine',
+			version: '1',
+			status: 'in_progress',
+			startedAt: '2026-10-17T12:00:00+00:00',
+			updatedAt: '2026-10-17T12:30:00+00:00',
+			completedAt: null,
+			activeLevelId: 'prefix-search',
+			levels: [
+				{
+					levelId: 'single-term-search',
+					status: 'completed',
+					submissionCount: 2,
+					completedAt: '2026-10-17T12:20:00+00:00',
+				},
+				{
+					levelId: 'prefix-search',
+					status: 'active',
+					submissionCount: 0,
+					completedAt: null,
+				},
+			],
+		},
+		level: {
+			id: 'prefix-search',
+			title: 'Prefix Search',
+			status: 'active',
+			sections: [
+				{
+					id: 'requirements',
+					title: 'What must work',
+					content: 'Add prefix matching from the backend.',
+					display: LevelSectionDisplay.Expanded,
+				},
+			],
+			designFeedback: null,
+		},
+		selectedSection: ChallengeSection.Build,
 	};
 }
 

@@ -4,7 +4,10 @@ import {
 	type AttemptCatalogSnapshot,
 	type OpenedAttempt,
 } from '../application/AttemptCatalog';
-import { AttemptSession } from '../application/AttemptSession';
+import {
+	AttemptSession,
+	type AttemptSessionSnapshot,
+} from '../application/AttemptSession';
 import {
 	ChallengeCatalog,
 	ChallengeCatalogStatus,
@@ -27,6 +30,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 	private snapshot: PrototypeSessionSnapshot;
 	private catalogSnapshot: ChallengeCatalogSnapshot;
 	private attemptCatalogSnapshot: AttemptCatalogSnapshot;
+	private attemptSessionSnapshot: AttemptSessionSnapshot | undefined;
 	private catalogLoad: Promise<void> | undefined;
 	private renderRevision = 0;
 	private markdownHighlightStylesheetUri: string | undefined;
@@ -42,6 +46,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		this.snapshot = session.getSnapshot();
 		this.catalogSnapshot = challengeCatalog.getSnapshot();
 		this.attemptCatalogSnapshot = attemptCatalog.getSnapshot();
+		this.attemptSessionSnapshot = attemptSession.getSnapshot();
 	}
 
 	public resolveWebviewView(view: vscode.WebviewView): void {
@@ -85,7 +90,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	public async showChallenge(): Promise<void> {
-		if (!this.snapshot.challenge) {
+		if (!this.attemptSessionSnapshot && !this.snapshot.challenge) {
 			await this.startChallenge();
 		}
 	}
@@ -108,6 +113,8 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 					return;
 				case ChallengeViewAction.BackToCatalog:
 					this.attemptCatalogSnapshot = this.attemptCatalog.clear();
+					this.attemptSession.clear();
+					this.attemptSessionSnapshot = undefined;
 					this.render();
 					return;
 				case ChallengeViewAction.RetryAttempts:
@@ -123,10 +130,21 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 					await this.runChecks();
 					return;
 				case ChallengeViewAction.SelectSection:
-					this.snapshot = this.session.selectSection(message.section);
+					if (this.attemptSessionSnapshot) {
+						this.attemptSessionSnapshot = this.attemptSession.selectSection(
+							message.section,
+						);
+					} else {
+						this.snapshot = this.session.selectSection(message.section);
+					}
 					break;
 				case ChallengeViewAction.SelectLevel:
 					this.snapshot = this.session.selectLevel(message.levelNumber);
+					break;
+				case ChallengeViewAction.SelectAttemptLevel:
+					this.attemptSessionSnapshot = await this.attemptSession.selectLevel(
+						message.levelId,
+					);
 					break;
 				case ChallengeViewAction.OpenWorkspace:
 					await this.openWorkspace();
@@ -152,14 +170,12 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 	private async startNewAttempt(challengeId: string): Promise<void> {
 		const openedAttempt = await this.attemptCatalog.startNew(challengeId);
 		this.openAttemptSession(openedAttempt);
-		this.snapshot = await this.session.start();
 		this.render();
 	}
 
 	private async continueAttempt(attemptId: string): Promise<void> {
 		const openedAttempt = await this.attemptCatalog.continue(attemptId);
 		this.openAttemptSession(openedAttempt);
-		this.snapshot = await this.session.start();
 		this.render();
 	}
 
@@ -170,7 +186,10 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		if (!challenge) {
 			throw new Error('The attempt challenge is not in the current catalog.');
 		}
-		this.attemptSession.open(challenge, openedAttempt);
+		this.attemptSessionSnapshot = this.attemptSession.open(
+			challenge,
+			openedAttempt,
+		);
 	}
 
 	private async retryAttempts(): Promise<void> {
@@ -258,6 +277,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 			},
 			this.catalogSnapshot,
 			this.attemptCatalogSnapshot,
+			this.attemptSessionSnapshot,
 		)
 			.then((html) => {
 				if (this.view === view && revision === this.renderRevision) {
@@ -279,6 +299,7 @@ type ViewMessage =
 	| { type: ChallengeViewAction.SelectChallenge; challengeId: string }
 	| { type: ChallengeViewAction.StartNewAttempt; challengeId: string }
 	| { type: ChallengeViewAction.ContinueAttempt; attemptId: string }
+	| { type: ChallengeViewAction.SelectAttemptLevel; levelId: string }
 	| {
 		type:
 			| ChallengeViewAction.Restart
@@ -317,6 +338,11 @@ function isViewMessage(value: unknown): value is ViewMessage {
 		return 'attemptId' in value
 			&& typeof value.attemptId === 'string'
 			&& value.attemptId.length > 0;
+	}
+	if (value.type === ChallengeViewAction.SelectAttemptLevel) {
+		return 'levelId' in value
+			&& typeof value.levelId === 'string'
+			&& value.levelId.length > 0;
 	}
 
 	return typeof value.type === 'string'

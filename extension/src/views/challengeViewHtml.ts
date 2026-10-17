@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { AttemptCatalogSnapshot } from '../application/AttemptCatalog';
+import type { AttemptSessionSnapshot } from '../application/AttemptSession';
 import type { ChallengeCatalogSnapshot } from '../application/ChallengeCatalog';
 import type { PrototypeSessionSnapshot } from '../application/PrototypeSession';
 import { ChallengeViewAction } from './ChallengeViewAction';
@@ -13,6 +14,7 @@ export async function createChallengeViewHtml(
 	resources: ChallengeViewResources = {},
 	catalog?: ChallengeCatalogSnapshot,
 	attemptCatalog?: AttemptCatalogSnapshot,
+	attemptSession?: AttemptSessionSnapshot,
 ): Promise<string> {
 	const nonce = randomBytes(16).toString('base64');
 	const body = await renderChallenge(
@@ -20,6 +22,7 @@ export async function createChallengeViewHtml(
 		markdownRenderer,
 		catalog,
 		attemptCatalog,
+		attemptSession,
 	);
 	const styleSource = resources.cspSource
 		? ` ${resources.cspSource}`
@@ -83,6 +86,7 @@ document.addEventListener('click', (event) => {
 		attemptId: button.dataset.attemptId,
 		section: button.dataset.section,
 		levelNumber: levelNumber ? Number(levelNumber) : undefined,
+		levelId: button.dataset.levelId,
 	});
 });
 

@@ -3,6 +3,7 @@ import {
 	AttemptCatalogStatus,
 	type AttemptCatalogSnapshot,
 } from '../application/AttemptCatalog';
+import type { AttemptSessionSnapshot } from '../application/AttemptSession';
 import {
 	ChallengeCatalogStatus,
 	type ChallengeCatalogSnapshot,
@@ -148,7 +149,12 @@ export async function renderChallenge(
 	markdownRenderer: MarkdownRenderer,
 	catalog?: ChallengeCatalogSnapshot,
 	attemptCatalog?: AttemptCatalogSnapshot,
+	attemptSession?: AttemptSessionSnapshot,
 ): Promise<string> {
+	if (attemptSession) {
+		return renderBackendAttempt(attemptSession, markdownRenderer);
+	}
+
 	const challenge = snapshot.challenge;
 	if (!challenge) {
 		return renderWelcome(catalog, attemptCatalog);
@@ -177,6 +183,129 @@ export async function renderChallenge(
 			${activeSection}
 		</section>
 	</main>`;
+}
+
+async function renderBackendAttempt(
+	snapshot: AttemptSessionSnapshot,
+	markdownRenderer: MarkdownRenderer,
+): Promise<string> {
+	const currentLevelNumber = snapshot.attempt.levels.findIndex(
+		(progress) => progress.levelId === snapshot.level.id,
+	) + 1;
+	const statusClass = snapshot.attempt.status === 'completed' ? 'passed' : 'idle';
+	const statusLabel = snapshot.attempt.status === 'completed'
+		? 'Completed'
+		: 'In progress';
+	const activeContent = await renderBackendSection(snapshot, markdownRenderer);
+
+	return `<main class="shell">
+		<div class="brand"><span class="brand-mark" aria-hidden="true">C</span> CodeArc</div>
+		<header>
+			<div class="stage-meta">
+				<p class="eyebrow">Stage ${currentLevelNumber} of ${snapshot.challenge.levelCount}</p>
+				<span class="status status-${statusClass}">${statusLabel}</span>
+			</div>
+			<h1>${escapeHtml(snapshot.challenge.title)}</h1>
+			${renderBackendProgress(snapshot)}
+		</header>
+		${renderBackendTabs(snapshot)}
+		<section role="tabpanel">
+			${activeContent}
+		</section>
+		<div class="backend-view-footer">
+			<button class="action action-quiet" type="button" data-action="${ChallengeViewAction.BackToCatalog}">Back to challenges</button>
+		</div>
+	</main>`;
+}
+
+function renderBackendProgress(snapshot: AttemptSessionSnapshot): string {
+	const steps = Array.from(
+		{ length: snapshot.challenge.levelCount },
+		(_, index) => {
+			const progress = snapshot.attempt.levels[index];
+			if (!progress) {
+				return `<span
+					class="progress-step progress-step-locked"
+					aria-label="Stage ${index + 1}: locked"
+					title="Stage ${index + 1} is locked"
+				></span>`;
+			}
+
+			const selected = progress.levelId === snapshot.level.id;
+			const state = progress.status === 'completed' ? 'complete' : 'current';
+			return `<button
+				class="progress-step progress-step-${state}"
+				type="button"
+				aria-label="Stage ${index + 1}: ${state}${selected ? ', viewing' : ''}"
+				${selected ? 'aria-current="step"' : ''}
+				data-action="${ChallengeViewAction.SelectAttemptLevel}"
+				data-level-id="${escapeHtml(progress.levelId)}"
+				title="View stage ${index + 1}"
+			></button>`;
+		},
+	).join('');
+
+	return `<nav class="progress-track" aria-label="Challenge stages">${steps}</nav>`;
+}
+
+function renderBackendTabs(snapshot: AttemptSessionSnapshot): string {
+	return `<nav class="tabs" role="tablist" aria-label="Challenge sections">
+		${Object.values(ChallengeSection).map((section) => {
+			const selected = snapshot.selectedSection === section;
+			const disabled = section === ChallengeSection.Design
+				&& snapshot.level.designFeedback === null;
+			return `<button
+				class="tab"
+				type="button"
+				role="tab"
+				aria-selected="${String(selected)}"
+				tabindex="${selected ? '0' : '-1'}"
+				data-action="${ChallengeViewAction.SelectSection}"
+				data-section="${escapeHtml(section)}"
+				${disabled ? 'disabled title="Unlocks after this stage is completed"' : ''}
+			>${escapeHtml(section)}${disabled ? ' · Locked' : ''}</button>`;
+		}).join('')}
+	</nav>`;
+}
+
+async function renderBackendSection(
+	snapshot: AttemptSessionSnapshot,
+	markdownRenderer: MarkdownRenderer,
+): Promise<string> {
+	switch (snapshot.selectedSection) {
+		case ChallengeSection.Build: {
+			const sections = await Promise.all(
+				snapshot.level.sections.map((section) =>
+					renderLevelSection(section, markdownRenderer)),
+			);
+			return `<section class="card" aria-labelledby="backend-stage-title">
+				<p class="eyebrow">${snapshot.level.status === 'completed' ? 'Completed requirement' : 'Current requirement'}</p>
+				<h2 id="backend-stage-title">${escapeHtml(snapshot.level.title)}</h2>
+				<div class="level-sections">${sections.join('')}</div>
+			</section>`;
+		}
+		case ChallengeSection.Results:
+			return `<section class="card">
+				<p class="eyebrow">Test evidence</p>
+				<h2>Local test execution is not connected yet</h2>
+				<p class="small muted">The requirement is now loaded from the backend. The local runner will be connected in the next lifecycle step.</p>
+			</section>`;
+		case ChallengeSection.Design: {
+			if (snapshot.level.designFeedback === null) {
+				return `<section class="card locked">
+					<span class="lock" aria-hidden="true">◇</span>
+					<div><strong>Design is locked</strong><p class="small muted">Complete this stage to reveal its design tradeoffs.</p></div>
+				</section>`;
+			}
+			const feedback = await markdownRenderer.render(
+				removeLeadingHeading(snapshot.level.designFeedback),
+			);
+			return `<section class="card">
+				<p class="eyebrow">Design reflection</p>
+				<div class="markdown-content">${feedback}</div>
+			</section>`;
+		}
+	}
 }
 
 function renderProgress(snapshot: PrototypeSessionSnapshot): string {

@@ -195,6 +195,7 @@ code {
 .attempt-summary p { margin: 3px 0 8px; text-transform: capitalize; }
 .attempt-summary .action { width: auto; }
 .requirement-action { margin: 10px 0 16px; }
+.backend-view-footer { margin-top: 14px; }
 
 .level-sections {
 	border-top: 1px solid var(--vscode-panel-border);
