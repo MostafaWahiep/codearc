@@ -125,9 +125,7 @@ function renderAttemptCatalog(
 function renderAttempt(attempt: AttemptCatalogSnapshot['attempts'][number]): string {
 	const isComplete = attempt.status === 'completed';
 	const status = isComplete ? 'Completed' : 'In progress';
-	const level = attempt.activeLevelId
-		? attempt.activeLevelId.replaceAll('-', ' ')
-		: 'No active stage';
+	const level = attempt.activeLevelId.replaceAll('-', ' ');
 	const action = isComplete ? 'Review attempt' : 'Continue';
 
 	return `<article class="attempt-summary">

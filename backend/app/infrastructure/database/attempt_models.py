@@ -51,7 +51,7 @@ class AttemptModel(db.Model):
         ),
         default=AttemptStatus.IN_PROGRESS,
     )
-    active_level_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    active_level_id: Mapped[str] = mapped_column(String(100), nullable=False)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=_utc_now,

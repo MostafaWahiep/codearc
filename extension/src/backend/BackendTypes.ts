@@ -24,7 +24,7 @@ export interface AttemptSummaryDto {
 	startedAt: string;
 	updatedAt: string;
 	completedAt: string | null;
-	activeLevelId: string | null;
+	activeLevelId: string;
 }
 
 export interface AttemptDto {
@@ -36,6 +36,6 @@ export interface AttemptDto {
 	startedAt: string;
 	updatedAt: string;
 	completedAt: string | null;
-	activeLevelId: string | null;
+	activeLevelId: string;
 	levels: LevelProgressDto[];
 }

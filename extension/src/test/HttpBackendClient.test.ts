@@ -154,6 +154,21 @@ suite('HttpBackendClient', () => {
 			},
 		);
 	});
+
+	test('rejects an attempt without an active level ID', async () => {
+		const response = attemptResponse();
+		response.activeLevelId = null;
+		const client = createClient(async () => jsonResponse(response));
+
+		await assert.rejects(
+			client.getAttempt('22222222-2222-4222-8222-222222222222'),
+			(error: unknown) => {
+				assert.ok(error instanceof InvalidBackendResponseError);
+				assert.match(error.message, /response\.activeLevelId/);
+				return true;
+			},
+		);
+	});
 });
 
 function createClient(fetcher: BackendFetch): HttpBackendClient {

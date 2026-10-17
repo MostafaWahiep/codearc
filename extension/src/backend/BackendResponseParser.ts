@@ -57,7 +57,7 @@ export function parseAttempt(
 				attempt.completedAt,
 				'response.completedAt',
 			),
-			activeLevelId: expectNullableString(
+			activeLevelId: expectString(
 				attempt.activeLevelId,
 				'response.activeLevelId',
 			),
@@ -92,7 +92,7 @@ export function parseAttemptSummaries(
 					attempt.completedAt,
 					`${location}.completedAt`,
 				),
-				activeLevelId: expectNullableString(
+				activeLevelId: expectString(
 					attempt.activeLevelId,
 					`${location}.activeLevelId`,
 				),

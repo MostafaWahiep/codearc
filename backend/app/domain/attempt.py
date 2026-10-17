@@ -29,5 +29,5 @@ class Attempt:
     started_at: datetime
     updated_at: datetime
     completed_at: datetime | None
-    active_level_id: str | None
+    active_level_id: str
     levels: tuple[LevelProgress, ...]

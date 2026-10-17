@@ -9,7 +9,6 @@ from app.domain.challenge_level import VisibleLevel
 from app.repositories.attempt_repository import AttemptNotFound
 from app.repositories.challenge_repository import ChallengeNotFound
 from app.services.attempt_service import (
-    AttemptHasNoActiveLevel,
     AttemptLevelNotVisible,
     AttemptService,
 )
@@ -185,7 +184,7 @@ def get_active_level_in_attempt(
         return jsonify({
             "message": str(error),
         }), 404
-    except (AttemptLevelNotVisible) as error:
+    except AttemptLevelNotVisible as error:
         return jsonify({
             "message": str(error),
         }), 409

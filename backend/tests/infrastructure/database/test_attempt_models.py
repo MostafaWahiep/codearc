@@ -90,7 +90,7 @@ class AttemptModelTests(unittest.TestCase):
         self.assertFalse(attempt_columns["id"]["nullable"])
         self.assertFalse(attempt_columns["user_id"]["nullable"])
         self.assertFalse(attempt_columns["challenge_id"]["nullable"])
-        self.assertTrue(attempt_columns["active_level_id"]["nullable"])
+        self.assertFalse(attempt_columns["active_level_id"]["nullable"])
         self.assertTrue(attempt_columns["completed_at"]["nullable"])
         self.assertEqual(
             inspector.get_pk_constraint("attempts")["constrained_columns"],
@@ -181,6 +181,17 @@ class AttemptModelTests(unittest.TestCase):
                 LevelProgressModel(level_id="single-term-search"),
                 LevelProgressModel(level_id="single-term-search"),
             ],
+        )
+        db.session.add(attempt)
+
+        with self.assertRaises(IntegrityError):
+            db.session.commit()
+
+    def test_requires_an_active_level_id(self) -> None:
+        attempt = AttemptModel(
+            user_id=uuid4(),
+            challenge_id="search-engine",
+            challenge_version="1",
         )
         db.session.add(attempt)
 

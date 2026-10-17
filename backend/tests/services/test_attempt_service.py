@@ -15,7 +15,6 @@ from app.domain.level_section import LevelSection, SectionDisplay
 from app.repositories.attempt_repository import AttemptNotFound, AttemptRepository
 from app.repositories.challenge_repository import ChallengeRepository
 from app.services.attempt_service import (
-    AttemptHasNoActiveLevel,
     AttemptLevelNotVisible,
     AttemptService,
 )
@@ -145,15 +144,6 @@ class AttemptServiceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(AttemptLevelNotVisible, "prefix-search"):
             self.service.get_visible_level(attempt.id, "prefix-search")
-
-        self.challenge_repository.load_level.assert_not_called()
-
-    def test_reports_when_an_attempt_has_no_active_level(self) -> None:
-        attempt = replace(self._attempt(), active_level_id=None)
-        self.attempt_repository.get_by_id.return_value = attempt
-
-        with self.assertRaisesRegex(AttemptHasNoActiveLevel, str(attempt.id)):
-            self.service.get_active_level(attempt.id)
 
         self.challenge_repository.load_level.assert_not_called()
 
