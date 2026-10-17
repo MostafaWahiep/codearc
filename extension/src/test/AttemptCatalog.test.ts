@@ -1,4 +1,5 @@
 import * as assert from 'node:assert';
+import { LevelSectionDisplay } from '@codearc/shared';
 import {
 	AttemptCatalog,
 	AttemptCatalogStatus,
@@ -31,9 +32,10 @@ suite('AttemptCatalog', () => {
 		assert.strictEqual(snapshot.attempts[0].id, attemptSummary().id);
 	});
 
-	test('starts a separate attempt for the injected learner', async () => {
+	test('starts an attempt and opens its current visible level', async () => {
 		const backendClient = createBackendClient();
 		let request: { userId: string; challengeId: string } | undefined;
+		const levelRequests: Array<{ attemptId: string; levelId: string }> = [];
 		backendClient.startAttempt = async (requestedUserId, requestedChallengeId) => {
 			request = {
 				userId: requestedUserId,
@@ -41,23 +43,36 @@ suite('AttemptCatalog', () => {
 			};
 			return fullAttempt();
 		};
+		backendClient.getVisibleLevel = async (attemptId, levelId) => {
+			levelRequests.push({ attemptId, levelId });
+			return visibleLevel();
+		};
 		const catalog = new AttemptCatalog(backendClient, userId);
 
-		const attempt = await catalog.startNew(challengeId);
+		const opened = await catalog.startNew(challengeId);
 
 		assert.deepStrictEqual(request, { userId, challengeId });
-		assert.strictEqual(attempt.id, fullAttempt().id);
+		assert.deepStrictEqual(levelRequests, [
+			{
+				attemptId: fullAttempt().id,
+				levelId: fullAttempt().activeLevelId,
+			},
+		]);
+		assert.strictEqual(opened.attempt.id, fullAttempt().id);
+		assert.strictEqual(opened.level.id, visibleLevel().id);
 	});
 
-	test('only continues an attempt loaded for the selected challenge', async () => {
+	test('continues a listed attempt and opens its current visible level', async () => {
 		const backendClient = createBackendClient();
 		backendClient.listAttempts = async () => [attemptSummary()];
 		backendClient.getAttempt = async () => fullAttempt();
+		backendClient.getVisibleLevel = async () => visibleLevel();
 		const catalog = new AttemptCatalog(backendClient, userId);
 		await catalog.load(challengeId);
 
-		const attempt = await catalog.continue(attemptSummary().id);
-		assert.strictEqual(attempt.id, fullAttempt().id);
+		const opened = await catalog.continue(attemptSummary().id);
+		assert.strictEqual(opened.attempt.id, fullAttempt().id);
+		assert.strictEqual(opened.level.id, visibleLevel().id);
 		await assert.rejects(
 			catalog.continue('33333333-3333-4333-8333-333333333333'),
 			/Choose one of the listed attempts/,
@@ -102,5 +117,22 @@ function fullAttempt() {
 				completedAt: null,
 			},
 		],
+	};
+}
+
+function visibleLevel() {
+	return {
+		id: 'single-term-search',
+		title: 'Level 1: Single-Term Search',
+		status: 'active' as const,
+		sections: [
+			{
+				id: 'api',
+				title: 'Public API',
+				content: '## SearchEngine',
+				display: LevelSectionDisplay.Expanded,
+			},
+		],
+		designFeedback: null,
 	};
 }

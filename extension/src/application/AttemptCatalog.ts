@@ -2,6 +2,7 @@ import type { BackendClient } from '../backend/BackendClient';
 import type {
 	AttemptDto,
 	AttemptSummaryDto,
+	VisibleLevelDto,
 } from '../backend/BackendTypes';
 
 export enum AttemptCatalogStatus {
@@ -16,6 +17,11 @@ export interface AttemptCatalogSnapshot {
 	challengeId?: string;
 	attempts: AttemptSummaryDto[];
 	errorMessage?: string;
+}
+
+export interface OpenedAttempt {
+	attempt: AttemptDto;
+	level: VisibleLevelDto;
 }
 
 export class AttemptCatalog {
@@ -58,11 +64,15 @@ export class AttemptCatalog {
 		return this.getSnapshot();
 	}
 
-	public startNew(challengeId: string): Promise<AttemptDto> {
-		return this.backendClient.startAttempt(this.userId, challengeId);
+	public async startNew(challengeId: string): Promise<OpenedAttempt> {
+		const attempt = await this.backendClient.startAttempt(
+			this.userId,
+			challengeId,
+		);
+		return this.openAttempt(attempt);
 	}
 
-	public async continue(attemptId: string): Promise<AttemptDto> {
+	public async continue(attemptId: string): Promise<OpenedAttempt> {
 		const isVisibleAttempt = this.snapshot.attempts.some(
 			(attempt) => attempt.id === attemptId,
 		);
@@ -70,7 +80,8 @@ export class AttemptCatalog {
 			throw new Error('Choose one of the listed attempts to continue.');
 		}
 
-		return this.backendClient.getAttempt(attemptId);
+		const attempt = await this.backendClient.getAttempt(attemptId);
+		return this.openAttempt(attempt);
 	}
 
 	public clear(): AttemptCatalogSnapshot {
@@ -86,5 +97,13 @@ export class AttemptCatalog {
 			...this.snapshot,
 			attempts: [...this.snapshot.attempts],
 		};
+	}
+
+	private async openAttempt(attempt: AttemptDto): Promise<OpenedAttempt> {
+		const level = await this.backendClient.getVisibleLevel(
+			attempt.id,
+			attempt.activeLevelId,
+		);
+		return { attempt, level };
 	}
 }
