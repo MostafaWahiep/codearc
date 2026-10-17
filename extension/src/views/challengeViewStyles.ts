@@ -188,6 +188,12 @@ code {
 .actions { display: grid; gap: 8px; margin-top: 12px; }
 .challenge-catalog { margin-top: 12px; text-align: left; }
 .challenge-summary h2 { margin-top: 4px; }
+.attempt-catalog { text-align: left; }
+.attempt-catalog h2 { margin-top: 4px; }
+.attempt-list { margin-top: 10px; border-top: 1px solid var(--vscode-panel-border); }
+.attempt-summary { padding: 11px 0; border-bottom: 1px solid var(--vscode-panel-border); }
+.attempt-summary p { margin: 3px 0 8px; text-transform: capitalize; }
+.attempt-summary .action { width: auto; }
 .requirement-action { margin: 10px 0 16px; }
 
 .level-sections {

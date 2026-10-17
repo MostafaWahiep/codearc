@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { AttemptCatalog } from './application/AttemptCatalog';
 import { ChallengeCatalog } from './application/ChallengeCatalog';
 import { ChallengeController } from './application/ChallengeController';
 import { PrototypeSession } from './application/PrototypeSession';
@@ -12,11 +13,13 @@ import { VsCodeMarkdownRenderer } from './infrastructure/VsCodeMarkdownRenderer'
 import { ChallengeViewProvider } from './views/ChallengeViewProvider';
 
 export function activate(context: vscode.ExtensionContext) {
+	const prototypeUserId = '11111111-1111-4111-8111-111111111111';
 	const backendUrl = vscode.workspace
 		.getConfiguration('codearc')
 		.get<string>('backendUrl', 'http://127.0.0.1:5000/api/v1');
 	const backendClient = new HttpBackendClient(backendUrl);
 	const challengeCatalog = new ChallengeCatalog(backendClient);
+	const attemptCatalog = new AttemptCatalog(backendClient, prototypeUserId);
 	const challengeRoot = path.resolve(
 		context.extensionPath,
 		'..',
@@ -32,6 +35,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const viewProvider = new ChallengeViewProvider(
 		session,
 		challengeCatalog,
+		attemptCatalog,
 		learnerWorkspace,
 		markdownRenderer,
 	);

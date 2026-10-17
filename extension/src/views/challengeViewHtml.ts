@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import type { AttemptCatalogSnapshot } from '../application/AttemptCatalog';
 import type { ChallengeCatalogSnapshot } from '../application/ChallengeCatalog';
 import type { PrototypeSessionSnapshot } from '../application/PrototypeSession';
 import { ChallengeViewAction } from './ChallengeViewAction';
@@ -11,9 +12,15 @@ export async function createChallengeViewHtml(
 	markdownRenderer: MarkdownRenderer,
 	resources: ChallengeViewResources = {},
 	catalog?: ChallengeCatalogSnapshot,
+	attemptCatalog?: AttemptCatalogSnapshot,
 ): Promise<string> {
 	const nonce = randomBytes(16).toString('base64');
-	const body = await renderChallenge(snapshot, markdownRenderer, catalog);
+	const body = await renderChallenge(
+		snapshot,
+		markdownRenderer,
+		catalog,
+		attemptCatalog,
+	);
 	const styleSource = resources.cspSource
 		? ` ${resources.cspSource}`
 		: '';
@@ -73,6 +80,7 @@ document.addEventListener('click', (event) => {
 	vscode.postMessage({
 		type,
 		challengeId: button.dataset.challengeId,
+		attemptId: button.dataset.attemptId,
 		section: button.dataset.section,
 		levelNumber: levelNumber ? Number(levelNumber) : undefined,
 	});

@@ -1,5 +1,9 @@
 import * as vscode from 'vscode';
 import {
+	AttemptCatalog,
+	type AttemptCatalogSnapshot,
+} from '../application/AttemptCatalog';
+import {
 	ChallengeCatalog,
 	ChallengeCatalogStatus,
 	type ChallengeCatalogSnapshot,
@@ -20,6 +24,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 	private view: vscode.WebviewView | undefined;
 	private snapshot: PrototypeSessionSnapshot;
 	private catalogSnapshot: ChallengeCatalogSnapshot;
+	private attemptCatalogSnapshot: AttemptCatalogSnapshot;
 	private catalogLoad: Promise<void> | undefined;
 	private renderRevision = 0;
 	private markdownHighlightStylesheetUri: string | undefined;
@@ -27,11 +32,13 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 	public constructor(
 		private readonly session: PrototypeSession,
 		private readonly challengeCatalog: ChallengeCatalog,
+		private readonly attemptCatalog: AttemptCatalog,
 		private readonly learnerWorkspace: LearnerWorkspaceService,
 		private readonly markdownRenderer: MarkdownRenderer,
 	) {
 		this.snapshot = session.getSnapshot();
 		this.catalogSnapshot = challengeCatalog.getSnapshot();
+		this.attemptCatalogSnapshot = attemptCatalog.getSnapshot();
 	}
 
 	public resolveWebviewView(view: vscode.WebviewView): void {
@@ -71,8 +78,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 			throw new Error('Choose an available challenge before starting.');
 		}
 
-		this.snapshot = await this.session.start();
-		this.render();
+		await this.loadAttempts(availableChallenge.id);
 	}
 
 	public async showChallenge(): Promise<void> {
@@ -88,15 +94,28 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 
 		try {
 			switch (message.type) {
-				case ChallengeViewAction.Start:
-						await this.startChallenge(message.challengeId);
-						return;
-				case ChallengeViewAction.Restart:
-					await this.startChallenge();
+				case ChallengeViewAction.SelectChallenge:
+					await this.startChallenge(message.challengeId);
 					return;
-					case ChallengeViewAction.RetryCatalog:
-						await this.loadChallengeCatalog(true);
-						return;
+				case ChallengeViewAction.StartNewAttempt:
+					await this.startNewAttempt(message.challengeId);
+					return;
+				case ChallengeViewAction.ContinueAttempt:
+					await this.continueAttempt(message.attemptId);
+					return;
+				case ChallengeViewAction.BackToCatalog:
+					this.attemptCatalogSnapshot = this.attemptCatalog.clear();
+					this.render();
+					return;
+				case ChallengeViewAction.RetryAttempts:
+					await this.retryAttempts();
+					return;
+				case ChallengeViewAction.Restart:
+					await this.startNewAttempt(this.requireSelectedChallengeId());
+					return;
+				case ChallengeViewAction.RetryCatalog:
+					await this.loadChallengeCatalog(true);
+					return;
 				case ChallengeViewAction.RunChecks:
 					await this.runChecks();
 					return;
@@ -125,6 +144,30 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 			this.snapshot = this.session.getSnapshot();
 			this.render();
 		}
+	}
+
+	private async startNewAttempt(challengeId: string): Promise<void> {
+		await this.attemptCatalog.startNew(challengeId);
+		this.snapshot = await this.session.start();
+		this.render();
+	}
+
+	private async continueAttempt(attemptId: string): Promise<void> {
+		await this.attemptCatalog.continue(attemptId);
+		this.snapshot = await this.session.start();
+		this.render();
+	}
+
+	private async retryAttempts(): Promise<void> {
+		await this.loadAttempts(this.requireSelectedChallengeId());
+	}
+
+	private requireSelectedChallengeId(): string {
+		const challengeId = this.attemptCatalogSnapshot.challengeId;
+		if (!challengeId) {
+			throw new Error('Choose a challenge first.');
+		}
+		return challengeId;
 	}
 
 	private async runChecks(): Promise<void> {
@@ -176,6 +219,14 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		return this.catalogLoad;
 	}
 
+	private async loadAttempts(challengeId: string): Promise<void> {
+		const load = this.attemptCatalog.load(challengeId);
+		this.attemptCatalogSnapshot = this.attemptCatalog.getSnapshot();
+		this.render();
+		this.attemptCatalogSnapshot = await load;
+		this.render();
+	}
+
 	private render(): void {
 		const view = this.view;
 		if (!view) {
@@ -191,6 +242,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 				markdownHighlightStylesheetUri: this.markdownHighlightStylesheetUri,
 			},
 			this.catalogSnapshot,
+			this.attemptCatalogSnapshot,
 		)
 			.then((html) => {
 				if (this.view === view && revision === this.renderRevision) {
@@ -209,11 +261,15 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 }
 
 type ViewMessage =
-	| { type: ChallengeViewAction.Start; challengeId: string }
+	| { type: ChallengeViewAction.SelectChallenge; challengeId: string }
+	| { type: ChallengeViewAction.StartNewAttempt; challengeId: string }
+	| { type: ChallengeViewAction.ContinueAttempt; attemptId: string }
 	| {
 		type:
 			| ChallengeViewAction.Restart
 			| ChallengeViewAction.RetryCatalog
+			| ChallengeViewAction.RetryAttempts
+			| ChallengeViewAction.BackToCatalog
 			| ChallengeViewAction.RunChecks
 			| ChallengeViewAction.OpenWorkspace
 			| ChallengeViewAction.BeginRefactor
@@ -236,10 +292,16 @@ function isViewMessage(value: unknown): value is ViewMessage {
 			&& typeof value.levelNumber === 'number'
 			&& Number.isInteger(value.levelNumber);
 	}
-	if (value.type === ChallengeViewAction.Start) {
+	if (value.type === ChallengeViewAction.SelectChallenge
+		|| value.type === ChallengeViewAction.StartNewAttempt) {
 		return 'challengeId' in value
 			&& typeof value.challengeId === 'string'
 			&& value.challengeId.length > 0;
+	}
+	if (value.type === ChallengeViewAction.ContinueAttempt) {
+		return 'attemptId' in value
+			&& typeof value.attemptId === 'string'
+			&& value.attemptId.length > 0;
 	}
 
 	return typeof value.type === 'string'

@@ -1,5 +1,9 @@
 import { LevelSectionDisplay } from '@codearc/shared';
 import {
+	AttemptCatalogStatus,
+	type AttemptCatalogSnapshot,
+} from '../application/AttemptCatalog';
+import {
 	ChallengeCatalogStatus,
 	type ChallengeCatalogSnapshot,
 } from '../application/ChallengeCatalog';
@@ -19,8 +23,13 @@ import {
 	statusLabel,
 } from './viewFormatting';
 
-function renderWelcome(catalog?: ChallengeCatalogSnapshot): string {
-	const catalogContent = renderCatalog(catalog);
+function renderWelcome(
+	catalog?: ChallengeCatalogSnapshot,
+	attemptCatalog?: AttemptCatalogSnapshot,
+): string {
+	const catalogContent = attemptCatalog?.challengeId
+		? renderAttemptCatalog(catalog, attemptCatalog)
+		: renderCatalog(catalog);
 	return `<main class="welcome">
 		<div class="welcome-mark" aria-hidden="true">C</div>
 		<p class="eyebrow">Learn through change</p>
@@ -59,21 +68,92 @@ function renderCatalog(catalog?: ChallengeCatalogSnapshot): string {
 				<button
 					class="action"
 					type="button"
-					data-action="${ChallengeViewAction.Start}"
+					data-action="${ChallengeViewAction.SelectChallenge}"
 					data-challenge-id="${escapeHtml(challenge.id)}"
 				>Start challenge</button>
 			</div>
 		</article>`).join('')}
 	</section>`;
 }
+
+function renderAttemptCatalog(
+	catalog: ChallengeCatalogSnapshot | undefined,
+	attemptCatalog: AttemptCatalogSnapshot,
+): string {
+	const challenge = catalog?.challenges.find(
+		(item) => item.id === attemptCatalog.challengeId,
+	);
+	const title = challenge?.title ?? attemptCatalog.challengeId ?? 'Challenge';
+	const backButton = `<button class="action action-quiet" type="button" data-action="${ChallengeViewAction.BackToCatalog}">Back to challenges</button>`;
+
+	if (attemptCatalog.status === AttemptCatalogStatus.Loading) {
+		return `<section class="card attempt-catalog">
+			<p class="eyebrow">${escapeHtml(title)}</p>
+			<h2>Your attempts</h2>
+			<p class="small muted"><span class="spinner" aria-hidden="true"></span>Loading attempts…</p>
+			<div class="actions">${backButton}</div>
+		</section>`;
+	}
+
+	if (attemptCatalog.status === AttemptCatalogStatus.Failed) {
+		return `<section class="card attempt-catalog">
+			<p class="eyebrow">${escapeHtml(title)}</p>
+			<h2>Could not load your attempts</h2>
+			<p class="small muted">${escapeHtml(attemptCatalog.errorMessage ?? 'Unknown server error.')}</p>
+			<div class="actions">
+				<button class="action" type="button" data-action="${ChallengeViewAction.RetryAttempts}">Retry</button>
+				${backButton}
+			</div>
+		</section>`;
+	}
+
+	const attempts = attemptCatalog.attempts.length === 0
+		? '<p class="small muted">You have not started this challenge yet.</p>'
+		: `<div class="attempt-list">${attemptCatalog.attempts.map(renderAttempt).join('')}</div>`;
+
+	return `<section class="card attempt-catalog">
+		<p class="eyebrow">${escapeHtml(title)}</p>
+		<h2>Your attempts</h2>
+		${attempts}
+		<div class="actions">
+			<button class="action" type="button" data-action="${ChallengeViewAction.StartNewAttempt}" data-challenge-id="${escapeHtml(attemptCatalog.challengeId ?? '')}">Start new attempt</button>
+			${backButton}
+		</div>
+	</section>`;
+}
+
+function renderAttempt(attempt: AttemptCatalogSnapshot['attempts'][number]): string {
+	const isComplete = attempt.status === 'completed';
+	const status = isComplete ? 'Completed' : 'In progress';
+	const level = attempt.activeLevelId
+		? attempt.activeLevelId.replaceAll('-', ' ')
+		: 'No active stage';
+	const action = isComplete ? 'Review attempt' : 'Continue';
+
+	return `<article class="attempt-summary">
+		<div>
+			<strong>${escapeHtml(status)}</strong>
+			<p class="small muted">${escapeHtml(level)} · Updated ${escapeHtml(formatAttemptDate(attempt.updatedAt))}</p>
+		</div>
+		<button class="action action-secondary" type="button" data-action="${ChallengeViewAction.ContinueAttempt}" data-attempt-id="${escapeHtml(attempt.id)}">${action}</button>
+	</article>`;
+}
+
+function formatAttemptDate(value: string): string {
+	const date = new Date(value);
+	return Number.isNaN(date.getTime())
+		? value
+		: new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+}
 export async function renderChallenge(
 	snapshot: PrototypeSessionSnapshot,
 	markdownRenderer: MarkdownRenderer,
 	catalog?: ChallengeCatalogSnapshot,
+	attemptCatalog?: AttemptCatalogSnapshot,
 ): Promise<string> {
 	const challenge = snapshot.challenge;
 	if (!challenge) {
-		return renderWelcome(catalog);
+		return renderWelcome(catalog, attemptCatalog);
 	}
 
 	const stageLabel = `Stage ${challenge.currentLevelNumber} of ${challenge.totalLevels}`;

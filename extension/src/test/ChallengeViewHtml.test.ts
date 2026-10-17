@@ -1,6 +1,10 @@
 import * as assert from 'node:assert';
 import { LevelSectionDisplay } from '@codearc/shared';
 import {
+	AttemptCatalogStatus,
+	type AttemptCatalogSnapshot,
+} from '../application/AttemptCatalog';
+import {
 	ChallengeCatalogStatus,
 	type ChallengeCatalogSnapshot,
 } from '../application/ChallengeCatalog';
@@ -73,6 +77,23 @@ suite('Challenge view rendering', () => {
 		assert.ok(html.indexOf('Public API') < html.indexOf('What must work'));
 		assert.ok(html.indexOf('What must work') < html.indexOf('Examples'));
 		assert.match(html, /Next requirement is hidden/);
+	});
+
+	test('renders existing attempts and explicit start and continue actions', async () => {
+		const html = await renderChallenge(
+			createSnapshot({ challenge: undefined }),
+			markdownRenderer,
+			createCatalogSnapshot(),
+			createAttemptCatalogSnapshot(),
+		);
+
+		assert.match(html, /Your attempts/);
+		assert.match(html, /In progress/);
+		assert.match(html, /single term search/);
+		assert.match(html, /data-action="continueAttempt"/);
+		assert.match(html, /data-attempt-id="22222222-2222-4222-8222-222222222222"/);
+		assert.match(html, /data-action="startNewAttempt"/);
+		assert.match(html, /Start new attempt/);
 	});
 
 	test('renders current and regression failures in Results', () => {
@@ -156,6 +177,24 @@ function createCatalogSnapshot(): ChallengeCatalogSnapshot {
 				title: 'Build a Search Engine',
 				description: 'Evolve one search engine.',
 				levelCount: 3,
+			},
+		],
+	};
+}
+
+function createAttemptCatalogSnapshot(): AttemptCatalogSnapshot {
+	return {
+		status: AttemptCatalogStatus.Ready,
+		challengeId: 'search-engine',
+		attempts: [
+			{
+				id: '22222222-2222-4222-8222-222222222222',
+				version: '1',
+				status: 'in_progress',
+				startedAt: '2026-10-17T12:00:00+00:00',
+				updatedAt: '2026-10-17T12:00:00+00:00',
+				completedAt: null,
+				activeLevelId: 'single-term-search',
 			},
 		],
 	};

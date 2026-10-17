@@ -1,5 +1,9 @@
 export enum ChallengeViewAction {
-	Start = 'start',
+	SelectChallenge = 'selectChallenge',
+	StartNewAttempt = 'startNewAttempt',
+	ContinueAttempt = 'continueAttempt',
+	BackToCatalog = 'backToCatalog',
+	RetryAttempts = 'retryAttempts',
 	RetryCatalog = 'retryCatalog',
 	Restart = 'restart',
 	RunChecks = 'runChecks',
