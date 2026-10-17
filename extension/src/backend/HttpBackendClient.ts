@@ -6,10 +6,12 @@ import {
 } from './BackendErrors';
 import {
 	parseAttempt,
+	parseAttemptSummaries,
 	parseChallengeSummaries,
 } from './BackendResponseParser';
 import type {
 	AttemptDto,
+	AttemptSummaryDto,
 	ChallengeSummaryDto,
 } from './BackendTypes';
 
@@ -36,6 +38,17 @@ export class HttpBackendClient implements BackendClient {
 		const path = '/challenges';
 		const response = await this.request(method, path);
 		return parseChallengeSummaries(response, method, path);
+	}
+
+	public async listAttempts(
+		userId: string,
+		challengeId: string,
+	): Promise<AttemptSummaryDto[]> {
+		const method = 'GET';
+		const query = new URLSearchParams({ userId, challengeId });
+		const path = `/attempts?${query.toString()}`;
+		const response = await this.request(method, path);
+		return parseAttemptSummaries(response, method, path);
 	}
 
 	public async startAttempt(

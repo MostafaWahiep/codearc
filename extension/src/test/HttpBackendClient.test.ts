@@ -61,6 +61,26 @@ suite('HttpBackendClient', () => {
 		});
 	});
 
+	test('lists a learner\'s attempts for a challenge', async () => {
+		const calls: Array<{ url: string; init?: RequestInit }> = [];
+		const client = createClient(async (url, init) => {
+			calls.push({ url, init });
+			return jsonResponse([attemptSummaryResponse()]);
+		});
+
+		const attempts = await client.listAttempts(
+			'11111111-1111-4111-8111-111111111111',
+			'search engine',
+		);
+
+		assert.deepStrictEqual(attempts, [attemptSummaryResponse()]);
+		assert.strictEqual(
+			calls[0].url,
+			`${backendUrl}/attempts?userId=11111111-1111-4111-8111-111111111111&challengeId=search+engine`,
+		);
+		assert.strictEqual(calls[0].init?.method, 'GET');
+	});
+
 	test('retrieves an attempt by ID', async () => {
 		const calls: Array<{ url: string; init?: RequestInit }> = [];
 		const client = createClient(async (url, init) => {
@@ -166,5 +186,17 @@ function attemptResponse(): Record<string, unknown> {
 				completedAt: null,
 			},
 		],
+	};
+}
+
+function attemptSummaryResponse(): Record<string, unknown> {
+	return {
+		id: '22222222-2222-4222-8222-222222222222',
+		version: '1',
+		status: 'in_progress',
+		startedAt: '2026-10-17T12:00:00+00:00',
+		updatedAt: '2026-10-17T12:00:00+00:00',
+		completedAt: null,
+		activeLevelId: 'single-term-search',
 	};
 }

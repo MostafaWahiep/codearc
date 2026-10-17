@@ -49,6 +49,7 @@ suite('ChallengeCatalog', () => {
 function createBackendClient(): BackendClient {
 	return {
 		listChallenges: async () => [],
+		listAttempts: async () => [],
 		startAttempt: async () => {
 			throw new Error('Not implemented by this test fake.');
 		},

@@ -17,6 +17,16 @@ export interface LevelProgressDto {
 	completedAt: string | null;
 }
 
+export interface AttemptSummaryDto {
+	id: string;
+	version: string;
+	status: AttemptStatus;
+	startedAt: string;
+	updatedAt: string;
+	completedAt: string | null;
+	activeLevelId: string | null;
+}
+
 export interface AttemptDto {
 	id: string;
 	userId: string;

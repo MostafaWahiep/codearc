@@ -2,6 +2,7 @@ import { InvalidBackendResponseError } from './BackendErrors';
 import type {
 	AttemptDto,
 	AttemptStatus,
+	AttemptSummaryDto,
 	ChallengeSummaryDto,
 	LevelProgressDto,
 	LevelProgressStatus,
@@ -64,6 +65,39 @@ export function parseAttempt(
 				parseLevelProgress,
 			),
 		};
+	});
+}
+
+export function parseAttemptSummaries(
+	value: unknown,
+	method: string,
+	path: string,
+): AttemptSummaryDto[] {
+	return parseResponse(method, path, () => {
+		const items = expectArray(value, 'response');
+		return items.map((item, index) => {
+			const location = `response[${index}]`;
+			const attempt = expectObject(item, location);
+			return {
+				id: expectString(attempt.id, `${location}.id`),
+				version: expectString(attempt.version, `${location}.version`),
+				status: expectOneOf(
+					attempt.status,
+					attemptStatuses,
+					`${location}.status`,
+				),
+				startedAt: expectString(attempt.startedAt, `${location}.startedAt`),
+				updatedAt: expectString(attempt.updatedAt, `${location}.updatedAt`),
+				completedAt: expectNullableString(
+					attempt.completedAt,
+					`${location}.completedAt`,
+				),
+				activeLevelId: expectNullableString(
+					attempt.activeLevelId,
+					`${location}.activeLevelId`,
+				),
+			};
+		});
 	});
 }
 
