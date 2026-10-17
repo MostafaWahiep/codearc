@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { AttemptCatalog } from './application/AttemptCatalog';
+import { AttemptSession } from './application/AttemptSession';
 import { ChallengeCatalog } from './application/ChallengeCatalog';
 import { ChallengeController } from './application/ChallengeController';
 import { PrototypeSession } from './application/PrototypeSession';
@@ -20,6 +21,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const backendClient = new HttpBackendClient(backendUrl);
 	const challengeCatalog = new ChallengeCatalog(backendClient);
 	const attemptCatalog = new AttemptCatalog(backendClient, prototypeUserId);
+	const attemptSession = new AttemptSession(backendClient);
 	const challengeRoot = path.resolve(
 		context.extensionPath,
 		'..',
@@ -36,6 +38,7 @@ export function activate(context: vscode.ExtensionContext) {
 		session,
 		challengeCatalog,
 		attemptCatalog,
+		attemptSession,
 		learnerWorkspace,
 		markdownRenderer,
 	);

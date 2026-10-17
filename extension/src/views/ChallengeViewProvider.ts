@@ -2,7 +2,9 @@ import * as vscode from 'vscode';
 import {
 	AttemptCatalog,
 	type AttemptCatalogSnapshot,
+	type OpenedAttempt,
 } from '../application/AttemptCatalog';
+import { AttemptSession } from '../application/AttemptSession';
 import {
 	ChallengeCatalog,
 	ChallengeCatalogStatus,
@@ -33,6 +35,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		private readonly session: PrototypeSession,
 		private readonly challengeCatalog: ChallengeCatalog,
 		private readonly attemptCatalog: AttemptCatalog,
+		private readonly attemptSession: AttemptSession,
 		private readonly learnerWorkspace: LearnerWorkspaceService,
 		private readonly markdownRenderer: MarkdownRenderer,
 	) {
@@ -147,15 +150,27 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private async startNewAttempt(challengeId: string): Promise<void> {
-		await this.attemptCatalog.startNew(challengeId);
+		const openedAttempt = await this.attemptCatalog.startNew(challengeId);
+		this.openAttemptSession(openedAttempt);
 		this.snapshot = await this.session.start();
 		this.render();
 	}
 
 	private async continueAttempt(attemptId: string): Promise<void> {
-		await this.attemptCatalog.continue(attemptId);
+		const openedAttempt = await this.attemptCatalog.continue(attemptId);
+		this.openAttemptSession(openedAttempt);
 		this.snapshot = await this.session.start();
 		this.render();
+	}
+
+	private openAttemptSession(openedAttempt: OpenedAttempt): void {
+		const challenge = this.catalogSnapshot.challenges.find(
+			(item) => item.id === openedAttempt.attempt.challengeId,
+		);
+		if (!challenge) {
+			throw new Error('The attempt challenge is not in the current catalog.');
+		}
+		this.attemptSession.open(challenge, openedAttempt);
 	}
 
 	private async retryAttempts(): Promise<void> {
