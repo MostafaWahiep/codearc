@@ -1,7 +1,9 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { ChallengeCatalog } from './application/ChallengeCatalog';
 import { ChallengeController } from './application/ChallengeController';
 import { PrototypeSession } from './application/PrototypeSession';
+import { HttpBackendClient } from './backend/HttpBackendClient';
 import { registerStartChallengeCommand } from './commands/startChallenge';
 import { FileChallengeRepository } from './infrastructure/FileChallengeRepository';
 import { LearnerWorkspaceService } from './infrastructure/LearnerWorkspaceService';
@@ -10,6 +12,11 @@ import { VsCodeMarkdownRenderer } from './infrastructure/VsCodeMarkdownRenderer'
 import { ChallengeViewProvider } from './views/ChallengeViewProvider';
 
 export function activate(context: vscode.ExtensionContext) {
+	const backendUrl = vscode.workspace
+		.getConfiguration('codearc')
+		.get<string>('backendUrl', 'http://127.0.0.1:5000/api/v1');
+	const backendClient = new HttpBackendClient(backendUrl);
+	const challengeCatalog = new ChallengeCatalog(backendClient);
 	const challengeRoot = path.resolve(
 		context.extensionPath,
 		'..',
@@ -24,6 +31,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const markdownRenderer = new VsCodeMarkdownRenderer();
 	const viewProvider = new ChallengeViewProvider(
 		session,
+		challengeCatalog,
 		learnerWorkspace,
 		markdownRenderer,
 	);

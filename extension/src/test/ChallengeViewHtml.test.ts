@@ -1,6 +1,10 @@
 import * as assert from 'node:assert';
 import { LevelSectionDisplay } from '@codearc/shared';
 import {
+	ChallengeCatalogStatus,
+	type ChallengeCatalogSnapshot,
+} from '../application/ChallengeCatalog';
+import {
 	ChallengeSection,
 	SessionStatus,
 	type PrototypeSessionSnapshot,
@@ -28,6 +32,7 @@ suite('Challenge view rendering', () => {
 				cspSource: 'https://test.webview.example',
 				markdownHighlightStylesheetUri: 'https://test.webview.example/highlight.css',
 			},
+			createCatalogSnapshot(),
 		);
 
 		assert.match(html, /Content-Security-Policy/);
@@ -38,7 +43,10 @@ suite('Challenge view rendering', () => {
 		);
 		assert.match(html, /<style>[\s\S]*\.welcome/);
 		assert.match(html, /acquireVsCodeApi\(\)/);
-		assert.match(html, /Start search challenge/);
+		assert.match(html, /Build a Search Engine/);
+		assert.match(html, /Evolve one search engine/);
+		assert.match(html, /3 stages/);
+		assert.match(html, /data-challenge-id="search-engine"/);
 	});
 
 	test('renders the current Build requirement with the Markdown renderer', async () => {
@@ -137,6 +145,21 @@ suite('Challenge view rendering', () => {
 		assert.match(unlockedHtml, /Reveal next requirement/);
 	});
 });
+
+function createCatalogSnapshot(): ChallengeCatalogSnapshot {
+	return {
+		status: ChallengeCatalogStatus.Ready,
+		challenges: [
+			{
+				id: 'search-engine',
+				version: '1',
+				title: 'Build a Search Engine',
+				description: 'Evolve one search engine.',
+				levelCount: 3,
+			},
+		],
+	};
+}
 
 function createSnapshot(
 	overrides: Partial<PrototypeSessionSnapshot> = {},

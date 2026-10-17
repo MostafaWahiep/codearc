@@ -1,5 +1,10 @@
 import * as vscode from 'vscode';
 import {
+	ChallengeCatalog,
+	ChallengeCatalogStatus,
+	type ChallengeCatalogSnapshot,
+} from '../application/ChallengeCatalog';
+import {
 	ChallengeSection,
 	PrototypeSession,
 	type PrototypeSessionSnapshot,
@@ -14,15 +19,19 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 
 	private view: vscode.WebviewView | undefined;
 	private snapshot: PrototypeSessionSnapshot;
+	private catalogSnapshot: ChallengeCatalogSnapshot;
+	private catalogLoad: Promise<void> | undefined;
 	private renderRevision = 0;
 	private markdownHighlightStylesheetUri: string | undefined;
 
 	public constructor(
 		private readonly session: PrototypeSession,
+		private readonly challengeCatalog: ChallengeCatalog,
 		private readonly learnerWorkspace: LearnerWorkspaceService,
 		private readonly markdownRenderer: MarkdownRenderer,
 	) {
 		this.snapshot = session.getSnapshot();
+		this.catalogSnapshot = challengeCatalog.getSnapshot();
 	}
 
 	public resolveWebviewView(view: vscode.WebviewView): void {
@@ -50,9 +59,18 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		});
 
 		this.render();
+		void this.loadChallengeCatalog();
 	}
 
-	public async startChallenge(): Promise<void> {
+	public async startChallenge(challengeId?: string): Promise<void> {
+		await this.loadChallengeCatalog();
+		const availableChallenge = challengeId
+			? this.catalogSnapshot.challenges.find((challenge) => challenge.id === challengeId)
+			: this.catalogSnapshot.challenges[0];
+		if (!availableChallenge) {
+			throw new Error('Choose an available challenge before starting.');
+		}
+
 		this.snapshot = await this.session.start();
 		this.render();
 	}
@@ -71,9 +89,14 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		try {
 			switch (message.type) {
 				case ChallengeViewAction.Start:
+						await this.startChallenge(message.challengeId);
+						return;
 				case ChallengeViewAction.Restart:
 					await this.startChallenge();
 					return;
+					case ChallengeViewAction.RetryCatalog:
+						await this.loadChallengeCatalog(true);
+						return;
 				case ChallengeViewAction.RunChecks:
 					await this.runChecks();
 					return;
@@ -131,6 +154,28 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		);
 	}
 
+	private async loadChallengeCatalog(force = false): Promise<void> {
+		if (!force && this.catalogSnapshot.status === ChallengeCatalogStatus.Ready) {
+			return;
+		}
+		if (this.catalogLoad) {
+			return this.catalogLoad;
+		}
+
+		const load = this.challengeCatalog.load();
+		this.catalogSnapshot = this.challengeCatalog.getSnapshot();
+		this.render();
+		this.catalogLoad = load
+			.then((snapshot) => {
+				this.catalogSnapshot = snapshot;
+				this.render();
+			})
+			.finally(() => {
+				this.catalogLoad = undefined;
+			});
+		return this.catalogLoad;
+	}
+
 	private render(): void {
 		const view = this.view;
 		if (!view) {
@@ -138,10 +183,15 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		}
 
 		const revision = ++this.renderRevision;
-		void createChallengeViewHtml(this.snapshot, this.markdownRenderer, {
-			cspSource: view.webview.cspSource,
-			markdownHighlightStylesheetUri: this.markdownHighlightStylesheetUri,
-		})
+		void createChallengeViewHtml(
+			this.snapshot,
+			this.markdownRenderer,
+			{
+				cspSource: view.webview.cspSource,
+				markdownHighlightStylesheetUri: this.markdownHighlightStylesheetUri,
+			},
+			this.catalogSnapshot,
+		)
 			.then((html) => {
 				if (this.view === view && revision === this.renderRevision) {
 					view.webview.html = html;
@@ -159,10 +209,11 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 }
 
 type ViewMessage =
+	| { type: ChallengeViewAction.Start; challengeId: string }
 	| {
 		type:
-			| ChallengeViewAction.Start
 			| ChallengeViewAction.Restart
+			| ChallengeViewAction.RetryCatalog
 			| ChallengeViewAction.RunChecks
 			| ChallengeViewAction.OpenWorkspace
 			| ChallengeViewAction.BeginRefactor
@@ -184,6 +235,11 @@ function isViewMessage(value: unknown): value is ViewMessage {
 		return 'levelNumber' in value
 			&& typeof value.levelNumber === 'number'
 			&& Number.isInteger(value.levelNumber);
+	}
+	if (value.type === ChallengeViewAction.Start) {
+		return 'challengeId' in value
+			&& typeof value.challengeId === 'string'
+			&& value.challengeId.length > 0;
 	}
 
 	return typeof value.type === 'string'

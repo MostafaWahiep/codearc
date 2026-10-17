@@ -1,4 +1,8 @@
 import { LevelSectionDisplay } from '@codearc/shared';
+import {
+	ChallengeCatalogStatus,
+	type ChallengeCatalogSnapshot,
+} from '../application/ChallengeCatalog';
 import type { LoadedLevelSection } from '../application/Challenge';
 import {
 	ChallengeSection,
@@ -15,25 +19,61 @@ import {
 	statusLabel,
 } from './viewFormatting';
 
-function renderWelcome(): string {
+function renderWelcome(catalog?: ChallengeCatalogSnapshot): string {
+	const catalogContent = renderCatalog(catalog);
 	return `<main class="welcome">
 		<div class="welcome-mark" aria-hidden="true">C</div>
 		<p class="eyebrow">Learn through change</p>
 		<h1>CodeArc</h1>
 		<p class="muted">Evolve one codebase as new requirements appear.</p>
-		<div class="actions">
-			<button class="action" type="button" data-action="${ChallengeViewAction.Start}">Start search challenge</button>
-		</div>
-		<p class="small muted">Week 1 interactive prototype</p>
+			${catalogContent}
 	</main>`;
+}
+
+function renderCatalog(catalog?: ChallengeCatalogSnapshot): string {
+	if (!catalog || catalog.status === ChallengeCatalogStatus.Idle
+		|| catalog.status === ChallengeCatalogStatus.Loading) {
+		return '<p class="small muted">Loading challenges…</p>';
+	}
+
+	if (catalog.status === ChallengeCatalogStatus.Failed) {
+		return `<section class="card">
+			<h2>Could not load challenges</h2>
+			<p class="small muted">${escapeHtml(catalog.errorMessage ?? 'Unknown server error.')}</p>
+			<div class="actions">
+				<button class="action" type="button" data-action="${ChallengeViewAction.RetryCatalog}">Retry</button>
+			</div>
+		</section>`;
+	}
+
+	if (catalog.challenges.length === 0) {
+		return '<p class="small muted">No challenges are available yet.</p>';
+	}
+
+	return `<section class="challenge-catalog" aria-label="Available challenges">
+		${catalog.challenges.map((challenge) => `<article class="card challenge-summary">
+			<p class="eyebrow">${challenge.levelCount} ${challenge.levelCount === 1 ? 'stage' : 'stages'}</p>
+			<h2>${escapeHtml(challenge.title)}</h2>
+			<p class="small muted">${escapeHtml(challenge.description)}</p>
+			<div class="actions">
+				<button
+					class="action"
+					type="button"
+					data-action="${ChallengeViewAction.Start}"
+					data-challenge-id="${escapeHtml(challenge.id)}"
+				>Start challenge</button>
+			</div>
+		</article>`).join('')}
+	</section>`;
 }
 export async function renderChallenge(
 	snapshot: PrototypeSessionSnapshot,
 	markdownRenderer: MarkdownRenderer,
+	catalog?: ChallengeCatalogSnapshot,
 ): Promise<string> {
 	const challenge = snapshot.challenge;
 	if (!challenge) {
-		return renderWelcome();
+		return renderWelcome(catalog);
 	}
 
 	const stageLabel = `Stage ${challenge.currentLevelNumber} of ${challenge.totalLevels}`;

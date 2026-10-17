@@ -186,6 +186,8 @@ code {
 }
 
 .actions { display: grid; gap: 8px; margin-top: 12px; }
+.challenge-catalog { margin-top: 12px; text-align: left; }
+.challenge-summary h2 { margin-top: 4px; }
 .requirement-action { margin: 10px 0 16px; }
 
 .level-sections {
