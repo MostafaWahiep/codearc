@@ -56,5 +56,8 @@ function createBackendClient(): BackendClient {
 		getAttempt: async () => {
 			throw new Error('Not implemented by this test fake.');
 		},
+		getVisibleLevel: async () => {
+			throw new Error('Not implemented by this test fake.');
+		},
 	};
 }

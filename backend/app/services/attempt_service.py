@@ -75,17 +75,6 @@ class AttemptService:
             challenge_id,
         )
 
-    def get_active_level(
-        self,
-        attempt_id: UUID,
-    ) -> VisibleLevel:
-        attempt = self.get_attempt(attempt_id)
-
-        return self._build_visible_level(
-            attempt,
-            attempt.active_level_id,
-        )
-
     def get_visible_level(
         self,
         attempt_id: UUID,

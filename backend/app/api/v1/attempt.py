@@ -170,14 +170,18 @@ def get_attempt(
         }), 404
 
 
-@attempt_bp.get("/<uuid:attempt_id>/level")
+@attempt_bp.get("/<uuid:attempt_id>/levels/<string:level_id>")
 @inject
-def get_active_level_in_attempt(
+def get_visible_level_in_attempt(
     attempt_id: UUID,
+    level_id: str,
     attempt_service: AttemptService = Provide[Container.attempt_service],
 ):
     try:
-        level = attempt_service.get_active_level(attempt_id=attempt_id)
+        level = attempt_service.get_visible_level(
+            attempt_id=attempt_id,
+            level_id=level_id,
+        )
 
         return jsonify(_serialize_visible_level(level)), 200
     except AttemptNotFound as error:

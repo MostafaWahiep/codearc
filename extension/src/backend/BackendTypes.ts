@@ -1,3 +1,5 @@
+import type { LevelSectionDisplay } from '@codearc/shared';
+
 export type AttemptStatus = 'in_progress' | 'completed';
 
 export type LevelProgressStatus = 'active' | 'completed';
@@ -15,6 +17,21 @@ export interface LevelProgressDto {
 	status: LevelProgressStatus;
 	submissionCount: number;
 	completedAt: string | null;
+}
+
+export interface LevelSectionDto {
+	id: string;
+	title: string;
+	content: string;
+	display: LevelSectionDisplay;
+}
+
+export interface VisibleLevelDto {
+	id: string;
+	title: string;
+	status: LevelProgressStatus;
+	sections: LevelSectionDto[];
+	designFeedback: string | null;
 }
 
 export interface AttemptSummaryDto {

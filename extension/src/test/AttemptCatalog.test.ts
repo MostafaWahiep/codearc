@@ -71,6 +71,9 @@ function createBackendClient(): BackendClient {
 		listAttempts: async () => [],
 		startAttempt: async () => fullAttempt(),
 		getAttempt: async () => fullAttempt(),
+		getVisibleLevel: async () => {
+			throw new Error('Not implemented by this test fake.');
+		},
 	};
 }
 

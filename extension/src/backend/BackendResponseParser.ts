@@ -1,3 +1,4 @@
+import { LevelSectionDisplay } from '@codearc/shared';
 import { InvalidBackendResponseError } from './BackendErrors';
 import type {
 	AttemptDto,
@@ -6,10 +7,13 @@ import type {
 	ChallengeSummaryDto,
 	LevelProgressDto,
 	LevelProgressStatus,
+	LevelSectionDto,
+	VisibleLevelDto,
 } from './BackendTypes';
 
 const attemptStatuses: AttemptStatus[] = ['in_progress', 'completed'];
 const levelProgressStatuses: LevelProgressStatus[] = ['active', 'completed'];
+const levelSectionDisplays = Object.values(LevelSectionDisplay);
 
 export function parseChallengeSummaries(
 	value: unknown,
@@ -99,6 +103,47 @@ export function parseAttemptSummaries(
 			};
 		});
 	});
+}
+
+export function parseVisibleLevel(
+	value: unknown,
+	method: string,
+	path: string,
+): VisibleLevelDto {
+	return parseResponse(method, path, () => {
+		const level = expectObject(value, 'response');
+		return {
+			id: expectString(level.id, 'response.id'),
+			title: expectString(level.title, 'response.title'),
+			status: expectOneOf(
+				level.status,
+				levelProgressStatuses,
+				'response.status',
+			),
+			sections: expectArray(level.sections, 'response.sections').map(
+				parseLevelSection,
+			),
+			designFeedback: expectNullableString(
+				level.designFeedback,
+				'response.designFeedback',
+			),
+		};
+	});
+}
+
+function parseLevelSection(value: unknown, index: number): LevelSectionDto {
+	const location = `response.sections[${index}]`;
+	const section = expectObject(value, location);
+	return {
+		id: expectString(section.id, `${location}.id`),
+		title: expectString(section.title, `${location}.title`),
+		content: expectString(section.content, `${location}.content`),
+		display: expectOneOf(
+			section.display,
+			levelSectionDisplays,
+			`${location}.display`,
+		),
+	};
 }
 
 function parseLevelProgress(value: unknown, index: number): LevelProgressDto {

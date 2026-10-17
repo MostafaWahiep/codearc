@@ -9,7 +9,7 @@ from app.domain.challenge_level import LevelProgressStatus, VisibleLevel
 from app.domain.level_section import LevelSection, SectionDisplay
 from app.repositories.attempt_repository import AttemptNotFound
 from app.repositories.challenge_repository import ChallengeNotFound
-from app.services.attempt_service import AttemptService
+from app.services.attempt_service import AttemptLevelNotVisible, AttemptService
 
 
 USER_ID = UUID("11111111-1111-4111-8111-111111111111")
@@ -265,8 +265,8 @@ class AttemptEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.service.get_attempt.assert_not_called()
 
-    def test_returns_the_active_level_with_ordered_sections(self) -> None:
-        self.service.get_active_level.return_value = VisibleLevel(
+    def test_returns_a_visible_level_with_ordered_sections(self) -> None:
+        self.service.get_visible_level.return_value = VisibleLevel(
             id="single-term-search",
             title="Level 1: Single-Term Search",
             status=LevelProgressStatus.ACTIVE,
@@ -289,7 +289,7 @@ class AttemptEndpointTests(unittest.TestCase):
 
         with self.app.container.attempt_service.override(self.service):
             response = self.client.get(
-                f"/api/v1/attempts/{ATTEMPT_ID}/level"
+                f"/api/v1/attempts/{ATTEMPT_ID}/levels/single-term-search"
             )
 
         self.assertEqual(response.status_code, 200)
@@ -316,8 +316,31 @@ class AttemptEndpointTests(unittest.TestCase):
                 "designFeedback": None,
             },
         )
-        self.service.get_active_level.assert_called_once_with(
+        self.service.get_visible_level.assert_called_once_with(
             attempt_id=ATTEMPT_ID,
+            level_id="single-term-search",
+        )
+
+    def test_rejects_a_level_that_is_not_visible_in_the_attempt(self) -> None:
+        self.service.get_visible_level.side_effect = AttemptLevelNotVisible(
+            ATTEMPT_ID,
+            "phrase-search",
+        )
+
+        with self.app.container.attempt_service.override(self.service):
+            response = self.client.get(
+                f"/api/v1/attempts/{ATTEMPT_ID}/levels/phrase-search"
+            )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.get_json(),
+            {
+                "message": (
+                    f"Level 'phrase-search' is not visible in attempt "
+                    f"'{ATTEMPT_ID}'"
+                )
+            },
         )
 
 if __name__ == "__main__":

@@ -77,7 +77,8 @@ class AttemptLifecycleIntegrationTests(unittest.TestCase):
         self.assertEqual(retrieve_response.get_json(), started_attempt)
 
         level_response = self.client.get(
-            f"/api/v1/attempts/{started_attempt['id']}/level"
+            f"/api/v1/attempts/{started_attempt['id']}"
+            f"/levels/{started_attempt['activeLevelId']}"
         )
 
         self.assertEqual(level_response.status_code, 200)

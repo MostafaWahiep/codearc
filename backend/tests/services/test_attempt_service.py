@@ -87,7 +87,7 @@ class AttemptServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(AttemptNotFound, str(attempt_id)):
             self.service.get_attempt(attempt_id)
 
-    def test_loads_only_the_active_level_from_the_pinned_release(self) -> None:
+    def test_loads_a_visible_level_from_the_pinned_release(self) -> None:
         attempt = self._attempt()
         sections = self._sections()
         self.attempt_repository.get_by_id.return_value = attempt
@@ -97,7 +97,10 @@ class AttemptServiceTests(unittest.TestCase):
             sections=sections,
         )
 
-        level = self.service.get_active_level(attempt.id)
+        level = self.service.get_visible_level(
+            attempt.id,
+            "single-term-search",
+        )
 
         self.assertEqual(level.id, "single-term-search")
         self.assertEqual(level.status, LevelProgressStatus.ACTIVE)
@@ -128,7 +131,10 @@ class AttemptServiceTests(unittest.TestCase):
             "## Design feedback"
         )
 
-        level = self.service.get_active_level(attempt.id)
+        level = self.service.get_visible_level(
+            attempt.id,
+            "single-term-search",
+        )
 
         self.assertEqual(level.status, LevelProgressStatus.COMPLETED)
         self.assertEqual(level.design_feedback, "## Design feedback")

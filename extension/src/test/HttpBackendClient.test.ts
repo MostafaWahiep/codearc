@@ -1,4 +1,5 @@
 import * as assert from 'node:assert';
+import { LevelSectionDisplay } from '@codearc/shared';
 import {
 	BackendConnectionError,
 	BackendResponseError,
@@ -100,6 +101,28 @@ suite('HttpBackendClient', () => {
 		assert.strictEqual(calls[0].init?.method, 'GET');
 	});
 
+	test('loads and validates a visible level for an attempt', async () => {
+		const calls: Array<{ url: string; init?: RequestInit }> = [];
+		const client = createClient(async (url, init) => {
+			calls.push({ url, init });
+			return jsonResponse(visibleLevelResponse());
+		});
+
+		const level = await client.getVisibleLevel(
+			'22222222-2222-4222-8222-222222222222',
+			'single term search',
+		);
+
+		assert.strictEqual(level.id, 'single-term-search');
+		assert.strictEqual(level.sections[0].display, LevelSectionDisplay.Expanded);
+		assert.strictEqual(level.designFeedback, null);
+		assert.strictEqual(
+			calls[0].url,
+			`${backendUrl}/attempts/22222222-2222-4222-8222-222222222222/levels/single%20term%20search`,
+		);
+		assert.strictEqual(calls[0].init?.method, 'GET');
+	});
+
 	test('surfaces the server error message and status', async () => {
 		const client = createClient(async () => jsonResponse(
 			{ message: "Challenge 'unknown' was not found" },
@@ -169,6 +192,25 @@ suite('HttpBackendClient', () => {
 			},
 		);
 	});
+
+	test('rejects an unknown level-section display mode', async () => {
+		const response = visibleLevelResponse();
+		const sections = response.sections as Array<Record<string, unknown>>;
+		sections[0].display = 'always-open';
+		const client = createClient(async () => jsonResponse(response));
+
+		await assert.rejects(
+			client.getVisibleLevel(
+				'22222222-2222-4222-8222-222222222222',
+				'single-term-search',
+			),
+			(error: unknown) => {
+				assert.ok(error instanceof InvalidBackendResponseError);
+				assert.match(error.message, /response\.sections\[0\]\.display/);
+				return true;
+			},
+		);
+	});
 });
 
 function createClient(fetcher: BackendFetch): HttpBackendClient {
@@ -213,5 +255,22 @@ function attemptSummaryResponse(): Record<string, unknown> {
 		updatedAt: '2026-10-17T12:00:00+00:00',
 		completedAt: null,
 		activeLevelId: 'single-term-search',
+	};
+}
+
+function visibleLevelResponse(): Record<string, unknown> {
+	return {
+		id: 'single-term-search',
+		title: 'Level 1: Single-Term Search',
+		status: 'active',
+		sections: [
+			{
+				id: 'api',
+				title: 'Public API',
+				content: '## SearchEngine',
+				display: 'expanded',
+			},
+		],
+		designFeedback: null,
 	};
 }

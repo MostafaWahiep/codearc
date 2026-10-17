@@ -8,11 +8,13 @@ import {
 	parseAttempt,
 	parseAttemptSummaries,
 	parseChallengeSummaries,
+	parseVisibleLevel,
 } from './BackendResponseParser';
 import type {
 	AttemptDto,
 	AttemptSummaryDto,
 	ChallengeSummaryDto,
+	VisibleLevelDto,
 } from './BackendTypes';
 
 export type BackendFetch = (
@@ -69,6 +71,16 @@ export class HttpBackendClient implements BackendClient {
 		const path = `/attempts/${encodeURIComponent(attemptId)}`;
 		const response = await this.request(method, path);
 		return parseAttempt(response, method, path);
+	}
+
+	public async getVisibleLevel(
+		attemptId: string,
+		levelId: string,
+	): Promise<VisibleLevelDto> {
+		const method = 'GET';
+		const path = `/attempts/${encodeURIComponent(attemptId)}/levels/${encodeURIComponent(levelId)}`;
+		const response = await this.request(method, path);
+		return parseVisibleLevel(response, method, path);
 	}
 
 	private async request(
