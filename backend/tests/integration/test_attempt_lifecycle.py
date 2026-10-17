@@ -37,10 +37,11 @@ class AttemptLifecycleIntegrationTests(unittest.TestCase):
         self.assertGreater(len(challenges), 0)
         challenge = challenges[0]
 
+        user_id = str(uuid4())
         start_response = self.client.post(
             "/api/v1/attempts",
             json={
-                "userId": str(uuid4()),
+                "userId": user_id,
                 "challengeId": challenge["id"],
             },
         )
@@ -53,6 +54,20 @@ class AttemptLifecycleIntegrationTests(unittest.TestCase):
         self.assertIsNotNone(started_attempt["activeLevelId"])
 
         db.session.remove()
+
+        attempts_response = self.client.get(
+            "/api/v1/attempts",
+            query_string={
+                "userId": user_id,
+                "challengeId": challenge["id"],
+            },
+        )
+
+        self.assertEqual(attempts_response.status_code, 200)
+        attempts = attempts_response.get_json()
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(attempts[0]["id"], started_attempt["id"])
+        self.assertNotIn("levels", attempts[0])
 
         retrieve_response = self.client.get(
             f"/api/v1/attempts/{started_attempt['id']}"

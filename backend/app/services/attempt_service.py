@@ -57,6 +57,16 @@ class AttemptService:
 
         return attempt
 
+    def list_attempts(
+        self,
+        user_id: UUID,
+        challenge_id: str,
+    ) -> list[Attempt]:
+        return self._attempt_repository.find_by_user_and_challenge(
+            user_id,
+            challenge_id,
+        )
+
     def _create_new_level_progress(
         self,
         level_id: str,

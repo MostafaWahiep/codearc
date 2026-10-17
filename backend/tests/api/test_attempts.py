@@ -84,6 +84,73 @@ class AttemptEndpointTests(unittest.TestCase):
             challenge_id="search-engine",
         )
 
+    def test_lists_user_attempts_for_challenge(self) -> None:
+        self.service.list_attempts.return_value = [make_attempt()]
+
+        with self.app.container.attempt_service.override(self.service):
+            response = self.client.get(
+                "/api/v1/attempts",
+                query_string={
+                    "userId": str(USER_ID),
+                    "challengeId": "search-engine",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json(),
+            [
+                {
+                    "id": str(ATTEMPT_ID),
+                    "version": "1",
+                    "status": "in_progress",
+                    "activeLevelId": "single-term-search",
+                    "startedAt": "2026-10-13T12:30:00+00:00",
+                    "updatedAt": "2026-10-13T12:30:00+00:00",
+                    "completedAt": None,
+                }
+            ],
+        )
+        self.service.list_attempts.assert_called_once_with(
+            user_id=USER_ID,
+            challenge_id="search-engine",
+        )
+
+    def test_rejects_missing_attempt_list_query_parameters(self) -> None:
+        with self.app.container.attempt_service.override(self.service):
+            response = self.client.get(
+                "/api/v1/attempts",
+                query_string={"userId": str(USER_ID)},
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json(),
+            {
+                "message": (
+                    "userId and challengeId are required query parameters"
+                )
+            },
+        )
+        self.service.list_attempts.assert_not_called()
+
+    def test_rejects_invalid_attempt_list_user_id(self) -> None:
+        with self.app.container.attempt_service.override(self.service):
+            response = self.client.get(
+                "/api/v1/attempts",
+                query_string={
+                    "userId": "not-a-uuid",
+                    "challengeId": "search-engine",
+                },
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json(),
+            {"message": "userId must be a valid UUID"},
+        )
+        self.service.list_attempts.assert_not_called()
+
     def test_rejects_missing_or_non_object_json_body(self) -> None:
         requests = (
             {},

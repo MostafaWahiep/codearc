@@ -40,6 +40,49 @@ def _serialize_attempt(attempt: Attempt) -> dict:
     }
 
 
+def _serialize_attempt_summary(attempt: Attempt) -> dict:
+    return {
+        "id": attempt.id,
+        "version": attempt.challenge_version,
+        "status": attempt.status.value,
+        "activeLevelId": attempt.active_level_id,
+        "startedAt": attempt.started_at.isoformat(),
+        "updatedAt": attempt.updated_at.isoformat(),
+        "completedAt": (
+            attempt.completed_at.isoformat() if attempt.completed_at else None
+        ),
+    }
+
+
+@attempt_bp.get("/")
+@inject
+def list_attempts(
+    attempt_service: AttemptService = Provide[Container.attempt_service],
+):
+    user_id = request.args.get("userId")
+    challenge_id = request.args.get("challengeId")
+    if not user_id or not challenge_id:
+        return jsonify({
+            "message": "userId and challengeId are required query parameters",
+        }), 400
+
+    try:
+        parsed_user_id = UUID(user_id)
+    except ValueError:
+        return jsonify({
+            "message": "userId must be a valid UUID",
+        }), 400
+
+    attempts = attempt_service.list_attempts(
+        user_id=parsed_user_id,
+        challenge_id=challenge_id,
+    )
+    return jsonify([
+        _serialize_attempt_summary(attempt)
+        for attempt in attempts
+    ]), 200
+
+
 @attempt_bp.post("/")
 @inject
 def start_attempt(
@@ -88,7 +131,7 @@ def start_attempt(
 
 @attempt_bp.get("/<uuid:attempt_id>")
 @inject
-def resume_attempt(
+def get_attempt(
     attempt_id: UUID,
     attempt_service: AttemptService = Provide[Container.attempt_service],
 ):

@@ -61,6 +61,19 @@ class AttemptServiceTests(unittest.TestCase):
         self.assertEqual(result, attempt)
         self.attempt_repository.get_by_id.assert_called_once_with(attempt.id)
 
+    def test_lists_user_attempts_for_challenge_in_repository_order(self) -> None:
+        user_id = uuid4()
+        attempts = [self._attempt(), self._attempt()]
+        self.attempt_repository.find_by_user_and_challenge.return_value = attempts
+
+        result = self.service.list_attempts(user_id, "search-engine")
+
+        self.assertEqual(result, attempts)
+        self.attempt_repository.find_by_user_and_challenge.assert_called_once_with(
+            user_id,
+            "search-engine",
+        )
+
     def test_unknown_attempt_raises_not_found(self) -> None:
         attempt_id = uuid4()
         self.attempt_repository.get_by_id.return_value = None
