@@ -8,6 +8,7 @@ from app.domain.challenge_level import (
     LoadedChallengeLevel,
 )
 from app.domain.level_section import LevelSection
+from app.domain.test_bundle import PublicTestFile, TestCategory
 from app.infrastructure.challenge_manifest_mapper import map_challenge_manifest
 from app.repositories.challenge_repository import ChallengeNotFound, ChallengeRepository
 from app.validation.manifest_validator import (
@@ -112,10 +113,60 @@ class FileChallengeRepository(ChallengeRepository):
             f"v{manifest.version}",
         )
 
-        return self._read_package_text(
+        return self._read_text_within(
             challenge_path,
-            level_definition.design_feedback_path,
+            challenge_path / level_definition.design_feedback_path,
+            "challenge content file",
         )
+
+    def load_public_tests(
+        self,
+        challenge_id: str,
+        version: str,
+        level_id: str,
+    ) -> tuple[PublicTestFile, ...]:
+        manifest = self.get_manifest(challenge_id, version)
+        level_definition = self._get_level_definition(manifest, level_id)
+        challenge_path = self._challenges_root.joinpath(
+            manifest.id,
+            f"v{manifest.version}",
+        ).resolve()
+        tests_path = (challenge_path / level_definition.tests_path).resolve()
+
+        try:
+            tests_path.relative_to(challenge_path)
+        except ValueError as error:
+            raise InvalidChallengePackage(
+                f"Tests path '{level_definition.tests_path}' points outside "
+                f"challenge package '{challenge_path}'"
+            ) from error
+
+        if not tests_path.is_dir():
+            raise InvalidChallengePackage(
+                f"Challenge tests directory does not exist: {tests_path}"
+            )
+
+        files = tuple(
+            PublicTestFile(
+                level_id=level_id,
+                path=file_path.relative_to(tests_path).as_posix(),
+                content=self._read_text_within(
+                    tests_path,
+                    file_path,
+                    "public test file",
+                ),
+                category=TestCategory.CURRENT,
+            )
+            for file_path in sorted(tests_path.rglob("*"))
+            if file_path.is_file()
+            and "__pycache__" not in file_path.parts
+            and file_path.suffix != ".pyc"
+        )
+        if not files:
+            raise InvalidChallengePackage(
+                f"Challenge tests directory is empty: {tests_path}"
+            )
+        return files
 
     def _load_manifests(self) -> dict[tuple[str, str], ChallengeManifest]:
         if not self._challenges_root.is_dir():
@@ -211,39 +262,41 @@ class FileChallengeRepository(ChallengeRepository):
             LevelSection(
                 id=section.id,
                 title=section.title,
-                content=self._read_package_text(
+                content=self._read_text_within(
                     challenge_path,
-                    section.content_path,
+                    challenge_path / section.content_path,
+                    "challenge content file",
                 ),
                 display=section.display,
             )
             for section in level.sections
         )
 
-    def _read_package_text(
+    def _read_text_within(
         self,
-        challenge_path: Path,
-        relative_path: str,
+        root: Path,
+        file_path: Path,
+        description: str,
     ) -> str:
-        resolved_root = challenge_path.resolve()
-        file_path = (resolved_root / relative_path).resolve()
+        resolved_root = root.resolve()
+        resolved_file_path = file_path.resolve()
 
         try:
-            file_path.relative_to(resolved_root)
+            resolved_file_path.relative_to(resolved_root)
         except ValueError as error:
             raise InvalidChallengePackage(
-                f"Path '{relative_path}' points outside "
-                f"challenge package '{resolved_root}'"
+                f"{description.capitalize()} '{file_path}' points outside "
+                f"allowed directory '{resolved_root}'"
             ) from error
 
-        if not file_path.is_file():
+        if not resolved_file_path.is_file():
             raise InvalidChallengePackage(
-                f"Challenge content file does not exist: {file_path}"
+                f"{description.capitalize()} does not exist: {resolved_file_path}"
             )
 
         try:
-            return file_path.read_text(encoding="utf-8")
-        except OSError as error:
+            return resolved_file_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
             raise InvalidChallengePackage(
-                f"Could not read challenge content file: {file_path}"
+                f"Could not read {description}: {resolved_file_path}"
             ) from error

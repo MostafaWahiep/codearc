@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request
 from app.container import Container
 from app.domain.attempt import Attempt
 from app.domain.challenge_level import VisibleLevel
+from app.domain.test_bundle import PublicTestFile
 from app.repositories.attempt_repository import AttemptNotFound
 from app.repositories.challenge_repository import ChallengeNotFound
 from app.services.attempt_service import (
@@ -73,6 +74,21 @@ def _serialize_visible_level(level: VisibleLevel) -> dict:
             for section in level.sections
         ],
         "designFeedback": level.design_feedback,
+    }
+
+
+def _serialize_test_bundle(files: tuple[PublicTestFile, ...]) -> dict:
+    return {
+        "runner": "pytest",
+        "files": [
+            {
+                "levelId": file.level_id,
+                "path": file.path,
+                "content": file.content,
+                "category": file.category.value,
+            }
+            for file in files
+        ],
     }
 
 
@@ -192,3 +208,18 @@ def get_visible_level_in_attempt(
         return jsonify({
             "message": str(error),
         }), 409
+
+
+@attempt_bp.get("/<uuid:attempt_id>/tests")
+@inject
+def get_visible_tests_in_attempt(
+    attempt_id: UUID,
+    attempt_service: AttemptService = Provide[Container.attempt_service],
+):
+    try:
+        files = attempt_service.get_visible_tests(attempt_id=attempt_id)
+        return jsonify(_serialize_test_bundle(files)), 200
+    except AttemptNotFound as error:
+        return jsonify({
+            "message": str(error),
+        }), 404

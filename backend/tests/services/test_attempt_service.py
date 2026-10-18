@@ -12,6 +12,7 @@ from app.domain.challenge_level import (
     LoadedChallengeLevel,
 )
 from app.domain.level_section import LevelSection, SectionDisplay
+from app.domain.test_bundle import PublicTestFile, TestCategory
 from app.repositories.attempt_repository import AttemptNotFound, AttemptRepository
 from app.repositories.challenge_repository import ChallengeRepository
 from app.services.attempt_service import (
@@ -152,6 +153,53 @@ class AttemptServiceTests(unittest.TestCase):
             self.service.get_visible_level(attempt.id, "prefix-search")
 
         self.challenge_repository.load_level.assert_not_called()
+
+    def test_loads_current_and_regression_tests_for_visible_levels(self) -> None:
+        attempt = self._attempt()
+        completed_progress = replace(
+            attempt.levels[0],
+            status=LevelProgressStatus.COMPLETED,
+            completed_at=self.now,
+        )
+        active_progress = replace(
+            attempt.levels[0],
+            level_id="prefix-search",
+        )
+        attempt = replace(
+            attempt,
+            active_level_id="prefix-search",
+            levels=(completed_progress, active_progress),
+        )
+        self.attempt_repository.get_by_id.return_value = attempt
+        self.challenge_repository.load_public_tests.side_effect = (
+            (
+                PublicTestFile(
+                    level_id="single-term-search",
+                    path="test_search.py",
+                    content="def test_search(): pass",
+                    category=TestCategory.CURRENT,
+                ),
+            ),
+            (
+                PublicTestFile(
+                    level_id="prefix-search",
+                    path="test_prefix.py",
+                    content="def test_prefix(): pass",
+                    category=TestCategory.CURRENT,
+                ),
+            ),
+        )
+
+        files = self.service.get_visible_tests(attempt.id)
+
+        self.assertEqual(
+            [file.category for file in files],
+            [TestCategory.REGRESSION, TestCategory.CURRENT],
+        )
+        self.assertEqual(
+            self.challenge_repository.load_public_tests.call_count,
+            2,
+        )
 
     @staticmethod
     def _manifest() -> ChallengeManifest:

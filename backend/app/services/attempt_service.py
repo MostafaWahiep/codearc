@@ -4,8 +4,10 @@ from uuid import UUID
 
 from app.domain.attempt import Attempt, AttemptStatus, LevelProgress
 from app.domain.challenge_level import LevelProgressStatus, VisibleLevel
+from app.domain.test_bundle import PublicTestFile, TestCategory
 from app.repositories.attempt_repository import AttemptNotFound, AttemptRepository
 from app.repositories.challenge_repository import ChallengeRepository
+
 
 class AttemptLevelNotVisible(LookupError):
     def __init__(self, attempt_id: UUID, level_id: str) -> None:
@@ -83,6 +85,36 @@ class AttemptService:
         attempt = self.get_attempt(attempt_id)
 
         return self._build_visible_level(attempt, level_id)
+
+    def get_visible_tests(
+        self,
+        attempt_id: UUID,
+    ) -> tuple[PublicTestFile, ...]:
+        attempt = self.get_attempt(attempt_id)
+        files: list[PublicTestFile] = []
+
+        for progress in attempt.levels:
+            category = (
+                TestCategory.CURRENT
+                if progress.level_id == attempt.active_level_id
+                else TestCategory.REGRESSION
+            )
+            level_files = self._challenge_repository.load_public_tests(
+                attempt.challenge_id,
+                attempt.challenge_version,
+                progress.level_id,
+            )
+            files.extend(
+                PublicTestFile(
+                    level_id=file.level_id,
+                    path=file.path,
+                    content=file.content,
+                    category=category,
+                )
+                for file in level_files
+            )
+
+        return tuple(files)
 
     def _build_visible_level(
         self,

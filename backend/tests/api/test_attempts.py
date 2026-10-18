@@ -7,6 +7,7 @@ from app import create_app
 from app.domain.attempt import Attempt, AttemptStatus, LevelProgress
 from app.domain.challenge_level import LevelProgressStatus, VisibleLevel
 from app.domain.level_section import LevelSection, SectionDisplay
+from app.domain.test_bundle import PublicTestFile, TestCategory
 from app.repositories.attempt_repository import AttemptNotFound
 from app.repositories.challenge_repository import ChallengeNotFound
 from app.services.attempt_service import AttemptLevelNotVisible, AttemptService
@@ -340,6 +341,37 @@ class AttemptEndpointTests(unittest.TestCase):
                     f"Level 'phrase-search' is not visible in attempt "
                     f"'{ATTEMPT_ID}'"
                 )
+            },
+        )
+
+    def test_returns_visible_public_test_files(self) -> None:
+        self.service.get_visible_tests.return_value = (
+            PublicTestFile(
+                level_id="single-term-search",
+                path="test_search.py",
+                content="def test_search(): pass",
+                category=TestCategory.CURRENT,
+            ),
+        )
+
+        with self.app.container.attempt_service.override(self.service):
+            response = self.client.get(
+                f"/api/v1/attempts/{ATTEMPT_ID}/tests"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json(),
+            {
+                "runner": "pytest",
+                "files": [
+                    {
+                        "levelId": "single-term-search",
+                        "path": "test_search.py",
+                        "content": "def test_search(): pass",
+                        "category": "current",
+                    }
+                ],
             },
         )
 

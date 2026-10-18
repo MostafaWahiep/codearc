@@ -89,6 +89,18 @@ class AttemptLifecycleIntegrationTests(unittest.TestCase):
         self.assertIsNone(visible_level["designFeedback"])
         self.assertNotIn("levels", visible_level)
 
+        tests_response = self.client.get(
+            f"/api/v1/attempts/{started_attempt['id']}/tests"
+        )
+
+        self.assertEqual(tests_response.status_code, 200)
+        test_bundle = tests_response.get_json()
+        self.assertEqual(test_bundle["runner"], "pytest")
+        self.assertGreater(len(test_bundle["files"]), 0)
+        self.assertTrue(
+            all(file["category"] == "current" for file in test_bundle["files"])
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,6 +2,8 @@ from typing import Protocol
 
 from app.domain.challenge import ChallengeManifest
 from app.domain.challenge_level import LoadedChallengeLevel
+from app.domain.test_bundle import PublicTestFile
+
 
 class ChallengeNotFound(LookupError):
     def __init__(self, challenge_id: str) -> None:
@@ -40,4 +42,12 @@ class ChallengeRepository(Protocol):
         version: str,
         level_id: str,
     ) -> str:
+        ...
+
+    def load_public_tests(
+        self,
+        challenge_id: str,
+        version: str,
+        level_id: str,
+    ) -> tuple[PublicTestFile, ...]:
         ...
