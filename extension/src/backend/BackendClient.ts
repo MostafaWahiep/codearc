@@ -3,6 +3,7 @@ import type {
 	AttemptSummaryDto,
 	ChallengeSummaryDto,
 	VisibleLevelDto,
+	PublicTestBundleDto,
 } from './BackendTypes';
 
 export interface BackendClient {
@@ -24,4 +25,6 @@ export interface BackendClient {
 		attemptId: string,
 		levelId: string,
 	): Promise<VisibleLevelDto>;
+
+	getVisibleTests(attemptId: string): Promise<PublicTestBundleDto>;
 }

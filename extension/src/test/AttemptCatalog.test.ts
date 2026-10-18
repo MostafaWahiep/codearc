@@ -89,6 +89,7 @@ function createBackendClient(): BackendClient {
 		getVisibleLevel: async () => {
 			throw new Error('Not implemented by this test fake.');
 		},
+		getVisibleTests: async () => ({ runner: 'pytest', files: [] }),
 	};
 }
 

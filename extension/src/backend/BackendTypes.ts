@@ -34,6 +34,20 @@ export interface VisibleLevelDto {
 	designFeedback: string | null;
 }
 
+export type PublicTestCategory = 'current' | 'regression';
+
+export interface PublicTestFileDto {
+	levelId: string;
+	path: string;
+	content: string;
+	category: PublicTestCategory;
+}
+
+export interface PublicTestBundleDto {
+	runner: 'pytest';
+	files: PublicTestFileDto[];
+}
+
 export interface AttemptSummaryDto {
 	id: string;
 	version: string;

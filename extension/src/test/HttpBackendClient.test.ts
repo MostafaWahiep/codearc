@@ -123,6 +123,35 @@ suite('HttpBackendClient', () => {
 		assert.strictEqual(calls[0].init?.method, 'GET');
 	});
 
+	test('loads visible public tests for an attempt', async () => {
+		const calls: Array<{ url: string; init?: RequestInit }> = [];
+		const client = createClient(async (url, init) => {
+			calls.push({ url, init });
+			return jsonResponse({
+				runner: 'pytest',
+				files: [
+					{
+						levelId: 'single-term-search',
+						path: 'test_search.py',
+						content: 'def test_search(): pass',
+						category: 'current',
+					},
+				],
+			});
+		});
+
+		const bundle = await client.getVisibleTests(
+			'22222222-2222-4222-8222-222222222222',
+		);
+
+		assert.strictEqual(bundle.runner, 'pytest');
+		assert.strictEqual(bundle.files[0].category, 'current');
+		assert.strictEqual(
+			calls[0].url,
+			`${backendUrl}/attempts/22222222-2222-4222-8222-222222222222/tests`,
+		);
+	});
+
 	test('surfaces the server error message and status', async () => {
 		const client = createClient(async () => jsonResponse(
 			{ message: "Challenge 'unknown' was not found" },

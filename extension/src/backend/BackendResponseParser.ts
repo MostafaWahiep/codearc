@@ -9,11 +9,14 @@ import type {
 	LevelProgressStatus,
 	LevelSectionDto,
 	VisibleLevelDto,
+	PublicTestBundleDto,
+	PublicTestCategory,
 } from './BackendTypes';
 
 const attemptStatuses: AttemptStatus[] = ['in_progress', 'completed'];
 const levelProgressStatuses: LevelProgressStatus[] = ['active', 'completed'];
 const levelSectionDisplays = Object.values(LevelSectionDisplay);
+const publicTestCategories: PublicTestCategory[] = ['current', 'regression'];
 
 export function parseChallengeSummaries(
 	value: unknown,
@@ -131,6 +134,33 @@ export function parseVisibleLevel(
 	});
 }
 
+export function parsePublicTestBundle(
+	value: unknown,
+	method: string,
+	path: string,
+): PublicTestBundleDto {
+	return parseResponse(method, path, () => {
+		const bundle = expectObject(value, 'response');
+		return {
+			runner: expectOneOf(bundle.runner, ['pytest'], 'response.runner'),
+			files: expectArray(bundle.files, 'response.files').map((value, index) => {
+				const location = `response.files[${index}]`;
+				const file = expectObject(value, location);
+				return {
+					levelId: expectString(file.levelId, `${location}.levelId`),
+					path: expectString(file.path, `${location}.path`),
+					content: expectStringValue(file.content, `${location}.content`),
+					category: expectOneOf(
+						file.category,
+						publicTestCategories,
+						`${location}.category`,
+					),
+				};
+			}),
+		};
+	});
+}
+
 function parseLevelSection(value: unknown, index: number): LevelSectionDto {
 	const location = `response.sections[${index}]`;
 	const section = expectObject(value, location);
@@ -209,6 +239,13 @@ function expectString(value: unknown, location: string): string {
 		throw new ResponseShapeError(`${location} must be a non-empty string`);
 	}
 
+	return value;
+}
+
+function expectStringValue(value: unknown, location: string): string {
+	if (typeof value !== 'string') {
+		throw new ResponseShapeError(`${location} must be a string`);
+	}
 	return value;
 }
 

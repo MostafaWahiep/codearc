@@ -76,6 +76,7 @@ function createBackendClient(): BackendClient {
 		getAttempt: async () => openedAttempt().attempt,
 		getVisibleLevel: async (_attemptId, levelId) =>
 			visibleLevel(levelId, 'active'),
+		getVisibleTests: async () => ({ runner: 'pytest', files: [] }),
 	};
 }
 
