@@ -13,9 +13,14 @@ from app.domain.challenge_level import (
 )
 from app.domain.level_section import LevelSection, SectionDisplay
 from app.domain.test_bundle import PublicTestFile, TestCategory
+from app.domain.test_submission import (
+    TestSubmission,
+    TestSubmissionOutcome,
+)
 from app.repositories.attempt_repository import AttemptNotFound, AttemptRepository
 from app.repositories.challenge_repository import ChallengeRepository
 from app.services.attempt_service import (
+    AttemptLevelNotActive,
     AttemptLevelNotVisible,
     AttemptService,
 )
@@ -24,6 +29,7 @@ from app.services.attempt_service import (
 class AttemptServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.attempt_repository = Mock(spec=AttemptRepository)
+        self.attempt_repository.update.side_effect = lambda attempt: attempt
         self.challenge_repository = Mock(spec=ChallengeRepository)
         self.now = datetime(2026, 10, 13, 12, tzinfo=timezone.utc)
         self.attempt_id = uuid4()
@@ -201,6 +207,161 @@ class AttemptServiceTests(unittest.TestCase):
             2,
         )
 
+    def test_rejects_submission_for_non_active_level(self) -> None:
+        attempt = self._attempt()
+        self.attempt_repository.get_by_id.return_value = attempt
+
+        submission = TestSubmission(
+            level_id="prefix-search",
+            exit_code=0,
+            timed_out=False,
+            passed_count=5,
+            failed_count=0,
+        )
+
+        with self.assertRaises(AttemptLevelNotActive):
+            self.service.submit_test_results(
+                attempt.id,
+                submission,
+            )
+
+        self.attempt_repository.update.assert_not_called()
+
+    def test_nonzero_exit_keeps_current_level_active(self) -> None:
+        test_submission = TestSubmission(
+            level_id="single-term-search",
+            exit_code=1,
+            timed_out=False,
+            passed_count=4,
+            failed_count=0,
+        )
+        attempt = self._attempt()
+        self.attempt_repository.get_by_id.return_value = attempt
+
+        result = self.service.submit_test_results(
+            attempt.id,
+            test_submission,
+        )
+
+        self.assertEqual(
+            result.outcome,
+            TestSubmissionOutcome.TESTS_FAILED,
+        )
+        self.assertEqual(
+            result.attempt.levels[0].submission_count,
+            attempt.levels[0].submission_count + 1,
+        )
+        self.assertEqual(
+            result.attempt.updated_at,
+            self.now,
+        )
+
+        self.assertEqual(result.attempt.active_level_id, "single-term-search")
+        saved_attempt = self.attempt_repository.update.call_args.args[0]
+
+        self.assertEqual(
+            saved_attempt.levels[0].submission_count,
+            1,
+        )
+
+    def test_passing_final_level_completes_attempt(self) -> None:
+        test_submission = TestSubmission(
+            level_id="single-term-search",
+            exit_code=0,
+            timed_out=False,
+            passed_count=5,
+            failed_count=0,
+        )
+        attempt = self._attempt()
+        self.attempt_repository.get_by_id.return_value = attempt
+        self.challenge_repository.get_manifest.return_value = self._manifest()
+
+        result = self.service.submit_test_results(
+            attempt.id,
+            test_submission,
+        )
+
+        self.assertEqual(
+            result.outcome,
+            TestSubmissionOutcome.ATTEMPT_COMPLETED,
+        )
+        self.assertEqual(
+            result.attempt.levels[0].submission_count,
+            attempt.levels[0].submission_count + 1,
+        )
+        self.assertEqual(
+            result.attempt.levels[0].status,
+            LevelProgressStatus.COMPLETED,
+        )
+        self.assertEqual(
+            result.attempt.levels[0].completed_at,
+            self.now,
+        )
+
+        self.assertEqual(
+            result.attempt.updated_at,
+            self.now,
+        )
+
+        self.assertEqual(
+            result.attempt.completed_at,
+            self.now,
+        )
+
+        self.assertEqual(
+            result.attempt.active_level_id,
+            "single-term-search",
+        )
+
+        saved_attempt = self.attempt_repository.update.call_args.args[0]
+
+        self.assertEqual(
+            saved_attempt.levels[0].submission_count,
+            1,
+        )
+
+    def test_passing_non_final_level_activates_next_level(self) -> None:
+        test_submission = TestSubmission(
+            level_id="single-term-search",
+            exit_code=0,
+            timed_out=False,
+            passed_count=5,
+            failed_count=0,
+        )
+        attempt = self._attempt()
+        self.attempt_repository.get_by_id.return_value = attempt
+        challenge = self._manifest()
+        challenge = replace(
+            challenge,
+            levels=(
+                challenge.levels[0],
+                self._level_prefix_search(),
+            ),
+        )
+        self.challenge_repository.get_manifest.return_value = challenge
+
+        result = self.service.submit_test_results(
+            attempt.id,
+            test_submission,
+        )
+
+        self.assertEqual(
+            result.outcome,
+            TestSubmissionOutcome.LEVEL_COMPLETED,
+        )
+        self.assertEqual(
+            result.completed_level_id,
+            "single-term-search",
+        )
+        self.assertEqual(
+            result.attempt.levels[0].status,
+            LevelProgressStatus.COMPLETED,
+        )
+        self.assertEqual(
+            result.attempt.levels[1].status,
+            LevelProgressStatus.ACTIVE,
+        )
+
     @staticmethod
     def _manifest() -> ChallengeManifest:
         return ChallengeManifest(
@@ -237,6 +398,15 @@ class AttemptServiceTests(unittest.TestCase):
             ),
         )
 
+    @staticmethod
+    def _level_prefix_search() -> ChallengeLevelDefinition:
+        return ChallengeLevelDefinition(
+            id="prefix-search",
+            title="Level 2",
+            sections=(),
+            design_feedback_path="level-2/design-feedback.md",
+            tests_path="level-2/tests",
+        )
 
 if __name__ == "__main__":
     unittest.main()

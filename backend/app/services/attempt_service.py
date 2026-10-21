@@ -1,10 +1,17 @@
+from dataclasses import replace
 from datetime import datetime
 from typing import Callable
 from uuid import UUID
 
 from app.domain.attempt import Attempt, AttemptStatus, LevelProgress
+from app.domain.challenge import ChallengeManifest
 from app.domain.challenge_level import LevelProgressStatus, VisibleLevel
 from app.domain.test_bundle import PublicTestFile, TestCategory
+from app.domain.test_submission import (
+    TestSubmission,
+    TestSubmissionOutcome,
+    TestSubmissionResult,
+)
 from app.repositories.attempt_repository import AttemptNotFound, AttemptRepository
 from app.repositories.challenge_repository import ChallengeRepository
 
@@ -16,6 +23,21 @@ class AttemptLevelNotVisible(LookupError):
         )
         self.attempt_id = attempt_id
         self.level_id = level_id
+
+
+class AttemptLevelNotActive(LookupError):
+    def __init__(self, attempt_id: UUID, level_id: str, active_level_id: str) -> None:
+        super().__init__(
+            f"Level '{level_id}' is not the active level in attempt "
+            f"'{attempt_id}'. The active level is '{active_level_id}'"
+        )
+        self.attempt_id = attempt_id
+        self.level_id = level_id
+        self.active_level_id = active_level_id
+
+
+class InvalidAttemptState(RuntimeError):
+    pass
 
 
 class AttemptService:
@@ -116,6 +138,74 @@ class AttemptService:
 
         return tuple(files)
 
+    def submit_test_results(
+        self,
+        attempt_id: UUID,
+        submission: TestSubmission,
+    ) -> TestSubmissionResult:
+        attempt = self.get_attempt(attempt_id)
+
+        if submission.level_id != attempt.active_level_id:
+            raise AttemptLevelNotActive(
+                attempt_id,
+                submission.level_id,
+                attempt.active_level_id,
+            )
+
+        level_progress = self._find_level_progress(attempt, submission.level_id)
+
+        challenge = self._challenge_repository.get_manifest(
+            attempt.challenge_id,
+            attempt.challenge_version,
+        )
+
+        now = self._clock()
+
+        attempt = replace(attempt, updated_at=now)
+        level_progress = replace(
+            level_progress,
+            submission_count=level_progress.submission_count + 1,
+        )
+        attempt = self._replace_level_progress(attempt, level_progress)
+
+        if (
+            submission.exit_code != 0
+            or submission.timed_out
+            or submission.failed_count > 0
+        ):
+            return self._fail_test_run(
+                attempt,
+            )
+
+        level_progress = replace(
+            level_progress,
+            status=LevelProgressStatus.COMPLETED,
+            completed_at=level_progress.completed_at or now,
+        )
+        attempt = self._replace_level_progress(attempt, level_progress)
+
+        if submission.level_id == challenge.levels[-1].id:
+            return self._complete_attempt(
+                attempt,
+                level_progress,
+                now,
+            )
+
+        next_level_id = self._get_next_level_id(challenge, submission.level_id)
+
+        next_level_progress = self._create_new_level_progress(next_level_id)
+        attempt = replace(attempt, levels=(*attempt.levels, next_level_progress))
+
+        attempt = replace(attempt, active_level_id=next_level_id)
+
+        updated_attempt = self._attempt_repository.update(attempt)
+
+        return TestSubmissionResult(
+            outcome=TestSubmissionOutcome.LEVEL_COMPLETED,
+            attempt=updated_attempt,
+            completed_level_id=submission.level_id,
+        )
+
     def _build_visible_level(
         self,
         attempt: Attempt,
@@ -174,3 +264,84 @@ class AttemptService:
             submission_count=0,
             completed_at=None,
         )
+
+    def _fail_test_run(
+        self,
+        attempt: Attempt,
+    ) -> TestSubmissionResult:
+        updated_attempt = self._attempt_repository.update(attempt)
+
+        return TestSubmissionResult(
+            outcome=TestSubmissionOutcome.TESTS_FAILED,
+            attempt=updated_attempt,
+            completed_level_id=None,
+        )
+
+    def _complete_attempt(
+        self,
+        attempt: Attempt,
+        level_progress: LevelProgress,
+        completed_at: datetime,
+    ) -> TestSubmissionResult:
+        attempt = replace(
+            attempt,
+            status=AttemptStatus.COMPLETED,
+            completed_at=completed_at,
+        )
+
+        updated_attempt = self._attempt_repository.update(attempt)
+
+        return TestSubmissionResult(
+            outcome=TestSubmissionOutcome.ATTEMPT_COMPLETED,
+            attempt=updated_attempt,
+            completed_level_id=level_progress.level_id,
+        )
+
+    def _find_level_progress(
+        self,
+        attempt: Attempt,
+        level_id: str,
+    ) -> LevelProgress:
+        progress = next(
+            (
+                progress
+                for progress in attempt.levels
+                if progress.level_id == level_id
+            ),
+            None,
+        )
+
+        if progress is None:
+            raise InvalidAttemptState(
+                f"Attempt '{attempt.id}' has no progress for '{level_id}'"
+            )
+
+        return progress
+
+    def _get_next_level_id(
+        self,
+        challenge: ChallengeManifest,
+        current_level_id: str,
+    ) -> str:
+        level_ids = [level.id for level in challenge.levels]
+        current_index = level_ids.index(current_level_id)
+
+        if current_index == len(level_ids) - 1:
+            raise InvalidAttemptState(
+                f"Level '{current_level_id}' has no next level"
+            )
+
+        return level_ids[current_index + 1]
+
+    def _replace_level_progress(
+        self,
+        attempt: Attempt,
+        updated_progress: LevelProgress,
+    ) -> Attempt:
+        levels = tuple(
+            updated_progress
+            if progress.level_id == updated_progress.level_id
+            else progress
+            for progress in attempt.levels
+        )
+        return replace(attempt, levels=levels)

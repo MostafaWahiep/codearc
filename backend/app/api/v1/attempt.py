@@ -3,14 +3,17 @@ from uuid import UUID
 from dependency_injector.wiring import Provide, inject
 from flask import Blueprint, jsonify, request
 
+from app.api.v1.exceptions import InvalidRequest
 from app.container import Container
 from app.domain.attempt import Attempt
 from app.domain.challenge_level import VisibleLevel
 from app.domain.test_bundle import PublicTestFile
+from app.domain.test_submission import TestSubmission, TestSubmissionResult
 from app.repositories.attempt_repository import AttemptNotFound
 from app.repositories.challenge_repository import ChallengeNotFound
 from app.services.attempt_service import (
     AttemptLevelNotVisible,
+    AttemptLevelNotActive,
     AttemptService,
 )
 
@@ -90,6 +93,48 @@ def _serialize_test_bundle(files: tuple[PublicTestFile, ...]) -> dict:
             for file in files
         ],
     }
+
+
+def _serialize_test_submission_result(result: TestSubmissionResult) -> dict:
+    return {
+        "outcome": result.outcome,
+        "attempt": _serialize_attempt(result.attempt),
+        "completedLevelId": result.completed_level_id,
+    }
+
+
+def _parse_test_submission(body: object) -> TestSubmission:
+    if not isinstance(body, dict):
+        raise InvalidRequest("Request body must be a JSON object")
+
+    level_id = body.get("levelId")
+    exit_code = body.get("exitCode")
+    timed_out = body.get("timedOut")
+    passed_count = body.get("passedCount")
+    failed_count = body.get("failedCount")
+
+    if not isinstance(level_id, str) or not level_id.strip():
+        raise InvalidRequest("levelId must be a non-empty string")
+
+    if type(exit_code) is not int:
+        raise InvalidRequest("exitCode must be an integer")
+
+    if type(timed_out) is not bool:
+        raise InvalidRequest("timedOut must be a boolean")
+
+    if type(passed_count) is not int or passed_count < 0:
+        raise InvalidRequest("passedCount must be a non-negative integer")
+
+    if type(failed_count) is not int or failed_count < 0:
+        raise InvalidRequest("failedCount must be a non-negative integer")
+
+    return TestSubmission(
+        level_id=level_id,
+        exit_code=exit_code,
+        timed_out=timed_out,
+        passed_count=passed_count,
+        failed_count=failed_count,
+    )
 
 
 @attempt_bp.get("/")
@@ -223,3 +268,36 @@ def get_visible_tests_in_attempt(
         return jsonify({
             "message": str(error),
         }), 404
+
+
+@attempt_bp.post("/<uuid:attempt_id>/submissions")
+@inject
+def submit_test_results(
+    attempt_id: UUID,
+    attempt_service: AttemptService = Provide[Container.attempt_service],
+):
+    try:
+        body = request.get_json(silent=True)
+        submission = _parse_test_submission(body)
+
+        result = attempt_service.submit_test_results(
+            attempt_id,
+            submission,
+        )
+
+        return jsonify(_serialize_test_submission_result(result)), 200
+
+    except InvalidRequest as error:
+        return jsonify({
+            "message": str(error),
+        }), 400
+
+    except AttemptNotFound as error:
+        return jsonify({
+            "message": str(error),
+        }), 404
+
+    except AttemptLevelNotActive as error:
+        return jsonify({
+            "message": str(error),
+        }), 409
