@@ -2,7 +2,7 @@ import * as assert from 'node:assert';
 import { LevelSectionDisplay } from '@codearc/shared';
 import type { OpenedAttempt } from '../application/AttemptCatalog';
 import { AttemptSession } from '../application/AttemptSession';
-import { ChallengeSection } from '../application/PrototypeSession';
+import { ChallengeSection } from '../application/ChallengeSection';
 import type { BackendClient } from '../backend/BackendClient';
 
 suite('AttemptSession', () => {
@@ -14,6 +14,39 @@ suite('AttemptSession', () => {
 		assert.strictEqual(snapshot.attempt.id, openedAttempt().attempt.id);
 		assert.strictEqual(snapshot.level.id, 'prefix-search');
 		assert.strictEqual(snapshot.selectedSection, ChallengeSection.Build);
+		assert.strictEqual(snapshot.testStatus, 'idle');
+	});
+
+	test('tracks a normalized local test run', () => {
+		const session = new AttemptSession(createBackendClient());
+		session.open(challengeSummary(), openedAttempt());
+
+		const running = session.startTestRun();
+		const complete = session.completeTestRun({
+			passed: true,
+			passedCount: 1,
+			failedCount: 0,
+			totalCount: 1,
+			failures: [],
+			testCases: [
+				{
+					name: 'test_prefix',
+					levelId: 'prefix-search',
+					category: 'current',
+					status: 'passed',
+				},
+			],
+			exitCode: 0,
+			timedOut: false,
+			runnerVersion: 'pytest 9.0.0',
+			codeHash: 'abc123',
+			durationMilliseconds: 40,
+		});
+
+		assert.strictEqual(running.testStatus, 'running');
+		assert.strictEqual(running.selectedSection, ChallengeSection.Results);
+		assert.strictEqual(complete.testStatus, 'passed');
+		assert.strictEqual(complete.latestTestEvidence?.codeHash, 'abc123');
 	});
 
 	test('loads another level already visible in the attempt', async () => {
