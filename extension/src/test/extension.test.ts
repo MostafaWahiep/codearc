@@ -3,6 +3,11 @@ import * as vscode from 'vscode';
 
 suite('Extension Test Suite', () => {
 	test('contributes the start challenge command', async () => {
+		const extension = vscode.extensions.getExtension('undefined_publisher.codearc');
+		if (!extension) {
+			throw new Error('CodeArc extension is not installed in the test host.');
+		}
+		await extension.activate();
 		const commands = await vscode.commands.getCommands(true);
 
 		if (!commands.includes('codearc.startChallenge')) {
