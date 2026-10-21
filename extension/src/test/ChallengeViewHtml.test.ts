@@ -9,19 +9,10 @@ import {
 	ChallengeCatalogStatus,
 	type ChallengeCatalogSnapshot,
 } from '../application/ChallengeCatalog';
-import {
-	ChallengeSection,
-	SessionStatus,
-	type PrototypeSessionSnapshot,
-} from '../application/PrototypeSession';
-import {
-	TestCategory,
-	TestRunMode,
-} from '../application/TestRunner';
+import { ChallengeSection } from '../application/ChallengeSection';
+import type { MarkdownRenderer } from '../views/MarkdownRenderer';
 import { renderChallenge } from '../views/challengeViewContent';
 import { createChallengeViewHtml } from '../views/challengeViewHtml';
-import { renderResults } from '../views/challengeResultsView';
-import type { MarkdownRenderer } from '../views/MarkdownRenderer';
 import { escapeHtml } from '../views/viewFormatting';
 
 const markdownRenderer: MarkdownRenderer = {
@@ -29,9 +20,8 @@ const markdownRenderer: MarkdownRenderer = {
 };
 
 suite('Challenge view rendering', () => {
-	test('assembles the welcome document with styles and webview behavior', async () => {
+	test('assembles the challenge catalog document with styles and behavior', async () => {
 		const html = await createChallengeViewHtml(
-			createSnapshot({ challenge: undefined }),
 			markdownRenderer,
 			{
 				cspSource: 'https://test.webview.example',
@@ -42,47 +32,16 @@ suite('Challenge view rendering', () => {
 
 		assert.match(html, /Content-Security-Policy/);
 		assert.match(html, /style-src 'unsafe-inline' https:\/\/test\.webview\.example/);
-		assert.match(
-			html,
-			/<link rel="stylesheet" href="https:\/\/test\.webview\.example\/highlight\.css">/,
-		);
-		assert.match(html, /<style>[\s\S]*\.welcome/);
 		assert.match(html, /acquireVsCodeApi\(\)/);
+		assert.match(html, /testPath: button\.dataset\.testPath/);
 		assert.match(html, /Build a Search Engine/);
 		assert.match(html, /Evolve one search engine/);
 		assert.match(html, /3 stages/);
 		assert.match(html, /data-challenge-id="search-engine"/);
 	});
 
-	test('renders the current Build requirement with the Markdown renderer', async () => {
-		const snapshot = createSnapshot();
-		if (!snapshot.challenge) {
-			assert.fail('Expected a challenge snapshot.');
-		}
-		snapshot.challenge.currentLevel.title = 'Stage <One>';
-		snapshot.challenge.currentLevel.sections[0].content = [
-			'# Hidden duplicate title',
-			'',
-			'Find <unsafe> content using `search`.',
-		].join('\n');
-
-		const html = await renderChallenge(snapshot, markdownRenderer);
-
-		assert.match(html, /Stage &lt;One&gt;/);
-		assert.match(html, /Find &lt;unsafe&gt; content using `search`\./);
-		assert.match(html, /data-rendered-markdown/);
-		assert.doesNotMatch(html, /Hidden duplicate title/);
-		assert.match(html, /Open challenge folder/);
-		assert.match(html, /<details class="level-section level-section-collapsible" open>/);
-		assert.match(html, /<summary id="level-section-examples">Examples<\/summary>/);
-		assert.ok(html.indexOf('Public API') < html.indexOf('What must work'));
-		assert.ok(html.indexOf('What must work') < html.indexOf('Examples'));
-		assert.match(html, /Next requirement is hidden/);
-	});
-
 	test('renders existing attempts and explicit start and continue actions', async () => {
 		const html = await renderChallenge(
-			createSnapshot({ challenge: undefined }),
 			markdownRenderer,
 			createCatalogSnapshot(),
 			createAttemptCatalogSnapshot(),
@@ -94,12 +53,10 @@ suite('Challenge view rendering', () => {
 		assert.match(html, /data-action="continueAttempt"/);
 		assert.match(html, /data-attempt-id="22222222-2222-4222-8222-222222222222"/);
 		assert.match(html, /data-action="startNewAttempt"/);
-		assert.match(html, /Start new attempt/);
 	});
 
-	test('renders backend requirement content and only visible level navigation', async () => {
+	test('renders backend requirements and only visible level navigation', async () => {
 		const html = await renderChallenge(
-			createSnapshot({ challenge: undefined }),
 			markdownRenderer,
 			createCatalogSnapshot(),
 			undefined,
@@ -108,98 +65,103 @@ suite('Challenge view rendering', () => {
 
 		assert.match(html, /Build a Search Engine/);
 		assert.match(html, /Prefix Search/);
-		assert.match(html, /Add prefix matching from the backend./);
+		assert.match(html, /Add prefix matching from the backend\./);
 		assert.match(html, /data-level-id="single-term-search"/);
 		assert.match(html, /data-level-id="prefix-search"/);
 		assert.doesNotMatch(html, /data-level-id="phrase-search"/);
 		assert.match(html, /Stage 3 is locked/);
 		assert.match(html, /Design · Locked/);
-		assert.doesNotMatch(html, /Open challenge folder/);
+		assert.match(html, /Open challenge folder/);
+		assert.match(html, /Run public tests/);
 	});
 
-	test('renders current and regression failures in Results', () => {
-		const html = renderResults(createSnapshot({
-			activeSection: ChallengeSection.Results,
-			status: SessionStatus.Failed,
-			latestTestResult: {
-				passed: false,
-				mode: TestRunMode.Simulated,
-				attempt: 1,
-				durationMilliseconds: 42,
-				testCases: [
-					{
-						name: 'current behavior',
-						category: TestCategory.Current,
-						passed: false,
-						durationMilliseconds: 20,
-						details: 'Expected <new> behavior.',
-					},
-					{
-						name: 'previous behavior',
-						category: TestCategory.Regression,
-						passed: true,
-						durationMilliseconds: 22,
-					},
-				],
-			},
-		}));
+	test('renders normalized local test evidence', async () => {
+		const snapshot = createAttemptSessionSnapshot();
+		snapshot.selectedSection = ChallengeSection.Results;
+		snapshot.testStatus = 'failed';
+		snapshot.latestTestEvidence = {
+			passed: false,
+			passedCount: 1,
+			failedCount: 1,
+			totalCount: 2,
+			failures: [{
+				name: 'test_exact',
+				levelId: 'single-term-search',
+				category: 'regression',
+				status: 'failed',
+				details: '.codearc/tests/regression/single-term-search/test_search.py::test_exact - AssertionError: assert [] == [\'doc-1\']',
+			}],
+			testCases: [
+				{ name: 'test_prefix', levelId: 'prefix-search', category: 'current', status: 'passed' },
+				{ name: 'test_exact', levelId: 'single-term-search', category: 'regression', status: 'failed', details: '.codearc/tests/regression/single-term-search/test_search.py::test_exact - AssertionError: assert [] == [\'doc-1\']' },
+			],
+			exitCode: 1,
+			timedOut: false,
+			runnerVersion: 'pytest 9.0.0',
+			codeHash: '1234567890abcdef',
+			durationMilliseconds: 125,
+		};
 
-		assert.match(html, /Current-stage checks/);
-		assert.match(html, /Regression checks/);
-		assert.match(html, /Expected &lt;new&gt; behavior\./);
-		assert.match(html, /1 failed/);
+		const html = await renderChallenge(
+			markdownRenderer,
+			createCatalogSnapshot(),
+			undefined,
+			snapshot,
+		);
+
+		assert.match(html, /Some tests need attention/);
+		assert.match(html, /Current requirement/);
+		assert.match(html, /Prefix Search/);
+		assert.match(html, /All 1 passed/);
+		assert.match(html, /1 current tests passed/);
+		assert.match(html, /Regression safety net/);
+		assert.match(html, /1 previous-level test failed/);
+		assert.match(html, /Single Term Search/);
+		assert.match(html, /0\/1/);
+		assert.match(html, />Prefix</);
+		assert.match(html, />Exact</);
+		assert.match(html, /title="test_prefix"/);
+		assert.match(html, /<span>Expected<\/span><code>\[&#39;doc-1&#39;\]<\/code>/);
+		assert.match(html, /<span>Received<\/span><code>\[\]<\/code>/);
+		assert.match(html, /data-action="openTestCase"/);
+		assert.match(html, /data-test-path="\.codearc\/tests\/regression\/single-term-search\/test_search\.py"/);
+		assert.match(html, /data-test-name="test_exact"/);
+		assert.match(html, /Open test case/);
+		assert.doesNotMatch(html, /Technical details/);
+		assert.match(html, /<details class="run-details">/);
+		assert.match(html, /pytest 9.0.0/);
+		assert.match(html, /1234567890ab/);
 	});
 
-	test('renders completed levels as navigation and keeps future levels locked', async () => {
-		const snapshot = createSnapshot();
-		if (!snapshot.challenge) {
-			assert.fail('Expected a challenge snapshot.');
-		}
-		snapshot.challenge.currentLevelNumber = 1;
-		snapshot.challenge.latestUnlockedLevelNumber = 2;
-		snapshot.challenge.isCurrentLevelComplete = true;
-		snapshot.challenge.isViewingLatestLevel = false;
-		snapshot.isEvolutionUnlocked = true;
+	test('reveals backend design feedback for a completed level', async () => {
+		const snapshot = createAttemptSessionSnapshot();
+		snapshot.level.status = 'completed';
+		snapshot.level.designFeedback = '# Reflection\n\nConsider an inverted index.';
+		snapshot.selectedSection = ChallengeSection.Design;
 
-		const html = await renderChallenge(snapshot, markdownRenderer);
+		const html = await renderChallenge(
+			markdownRenderer,
+			createCatalogSnapshot(),
+			undefined,
+			snapshot,
+		);
 
-		assert.match(html, /data-action="selectLevel"[\s\S]*?data-level-number="1"/);
-		assert.match(html, /data-action="selectLevel"[\s\S]*?data-level-number="2"/);
-		assert.doesNotMatch(html, /data-level-number="3"/);
-		assert.match(html, /Viewing completed stage 1/);
-		assert.match(html, /Return to stage 2/);
-	});
-
-	test('keeps Design feedback locked until the level passes', async () => {
-		const lockedHtml = await renderChallenge(createSnapshot({
-			activeSection: ChallengeSection.Design,
-		}), markdownRenderer);
-		const unlockedHtml = await renderChallenge(createSnapshot({
-			activeSection: ChallengeSection.Design,
-			status: SessionStatus.Passed,
-			isEvolutionUnlocked: true,
-			canRevealNext: true,
-		}), markdownRenderer);
-
-		assert.match(lockedHtml, /Design is locked/);
-		assert.doesNotMatch(lockedHtml, /Consider an inverted index/);
-		assert.match(unlockedHtml, /Consider an inverted index/);
-		assert.match(unlockedHtml, /Reveal next requirement/);
+		assert.match(html, /Design reflection/);
+		assert.match(html, /Consider an inverted index\./);
+		assert.doesNotMatch(html, /Design is locked/);
 	});
 });
 
 function createCatalogSnapshot(): ChallengeCatalogSnapshot {
 	return {
 		status: ChallengeCatalogStatus.Ready,
-		challenges: [
-			{
-				id: 'search-engine',
-				version: '1',
-				title: 'Build a Search Engine',
-				description: 'Evolve one search engine.',
-				levelCount: 3,
-			},
-		],
+		challenges: [{
+			id: 'search-engine',
+			version: '1',
+			title: 'Build a Search Engine',
+			description: 'Evolve one search engine.',
+			levelCount: 3,
+		}],
 	};
 }
 
@@ -207,17 +169,15 @@ function createAttemptCatalogSnapshot(): AttemptCatalogSnapshot {
 	return {
 		status: AttemptCatalogStatus.Ready,
 		challengeId: 'search-engine',
-		attempts: [
-			{
-				id: '22222222-2222-4222-8222-222222222222',
-				version: '1',
-				status: 'in_progress',
-				startedAt: '2026-10-17T12:00:00+00:00',
-				updatedAt: '2026-10-17T12:00:00+00:00',
-				completedAt: null,
-				activeLevelId: 'single-term-search',
-			},
-		],
+		attempts: [{
+			id: '22222222-2222-4222-8222-222222222222',
+			version: '1',
+			status: 'in_progress',
+			startedAt: '2026-10-17T12:00:00+00:00',
+			updatedAt: '2026-10-17T12:00:00+00:00',
+			completedAt: null,
+			activeLevelId: 'single-term-search',
+		}],
 	};
 }
 
@@ -235,93 +195,23 @@ function createAttemptSessionSnapshot(): AttemptSessionSnapshot {
 			completedAt: null,
 			activeLevelId: 'prefix-search',
 			levels: [
-				{
-					levelId: 'single-term-search',
-					status: 'completed',
-					submissionCount: 2,
-					completedAt: '2026-10-17T12:20:00+00:00',
-				},
-				{
-					levelId: 'prefix-search',
-					status: 'active',
-					submissionCount: 0,
-					completedAt: null,
-				},
+				{ levelId: 'single-term-search', status: 'completed', submissionCount: 2, completedAt: '2026-10-17T12:20:00+00:00' },
+				{ levelId: 'prefix-search', status: 'active', submissionCount: 0, completedAt: null },
 			],
 		},
 		level: {
 			id: 'prefix-search',
 			title: 'Prefix Search',
 			status: 'active',
-			sections: [
-				{
-					id: 'requirements',
-					title: 'What must work',
-					content: 'Add prefix matching from the backend.',
-					display: LevelSectionDisplay.Expanded,
-				},
-			],
+			sections: [{
+				id: 'requirements',
+				title: 'What must work',
+				content: 'Add prefix matching from the backend.',
+				display: LevelSectionDisplay.Expanded,
+			}],
 			designFeedback: null,
 		},
 		selectedSection: ChallengeSection.Build,
-	};
-}
-
-function createSnapshot(
-	overrides: Partial<PrototypeSessionSnapshot> = {},
-): PrototypeSessionSnapshot {
-	return {
-		activeSection: ChallengeSection.Build,
-		status: SessionStatus.Idle,
-		isEvolutionUnlocked: false,
-		canRevealNext: false,
-		challenge: {
-			id: 'search-engine',
-			title: 'Search Engine',
-			description: 'Build a search engine.',
-			starterPath: '/challenge/starter',
-			entrypointPath: '/challenge/starter/search_engine.py',
-			currentLevel: {
-				id: 'single-term-search',
-				title: 'Single-term search',
-				sections: [
-					{
-						id: 'change',
-						title: 'Why this changed',
-						display: LevelSectionDisplay.Static,
-						content: '# Context\n\nFind exact terms.',
-					},
-					{
-						id: 'api',
-						title: 'Public API',
-						display: LevelSectionDisplay.Expanded,
-						content: '`search(query)`',
-					},
-					{
-						id: 'requirements',
-						title: 'What must work',
-						display: LevelSectionDisplay.Expanded,
-						content: 'Match complete terms.',
-					},
-					{
-						id: 'examples',
-						title: 'Examples',
-						display: LevelSectionDisplay.Collapsed,
-						content: '`search("python")`',
-					},
-				],
-				designFeedback: '# Reflection\n\nConsider an inverted index.',
-				testsPath: '/challenge/level-1/tests',
-			},
-			currentLevelNumber: 1,
-			latestUnlockedLevelNumber: 1,
-			totalLevels: 3,
-			isCurrentLevelComplete: false,
-			isViewingLatestLevel: true,
-			isLatestLevelComplete: false,
-			canAdvance: false,
-			isChallengeComplete: false,
-		},
-		...overrides,
+		testStatus: 'idle',
 	};
 }

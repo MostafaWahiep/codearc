@@ -15,7 +15,7 @@ export interface AttemptSessionSnapshot {
 	attempt: AttemptDto;
 	level: VisibleLevelDto;
 	selectedSection: ChallengeSection;
-	testStatus?: AttemptTestStatus;
+	testStatus: AttemptTestStatus;
 	latestTestEvidence?: TestEvidence;
 }
 

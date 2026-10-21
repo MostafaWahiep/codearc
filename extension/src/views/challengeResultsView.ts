@@ -1,209 +1,252 @@
-import {
-	ChallengeSection,
-	SessionStatus,
-	type PrototypeSessionSnapshot,
-} from '../application/PrototypeSession';
-import {
-	TestCaseStatus,
-	TestCategory,
-	type TestCaseProgress,
-	type TestCaseResult,
-} from '../application/TestRunner';
+import type { AttemptSessionSnapshot } from '../application/AttemptSession';
+import type { NormalizedTestCase } from '../application/LocalTestRunner';
 import { ChallengeViewAction } from './ChallengeViewAction';
-import {
-	escapeHtml,
-	formatDuration,
-	formatEnumLabel,
-	testStatusSymbol,
-} from './viewFormatting';
+import { escapeHtml, formatDuration } from './viewFormatting';
 
-export function renderResults(snapshot: PrototypeSessionSnapshot): string {
-	if (snapshot.status === SessionStatus.Running) {
-		return renderRunningEvidence(snapshot);
-	}
-
-	if (!snapshot.latestTestResult) {
+export function renderBackendResults(snapshot: AttemptSessionSnapshot): string {
+	if (snapshot.level.id !== snapshot.attempt.activeLevelId) {
 		return `<section class="card">
-			<p class="eyebrow">Latest check</p>
-			<h2>Not run yet</h2>
-			<p class="muted">The run will check the current requirement and replay every earlier stage as a regression safety net.</p>
-			<h3>Run includes</h3>
-			<ul>
-				<li>Current-stage public behavior</li>
-				<li>Previous-stage regression coverage</li>
-				<li>Detailed failures and per-check timing</li>
-			</ul>
+			<p class="eyebrow">Test evidence</p>
+			<h2>This is a completed stage</h2>
+			<p class="small muted">New runs always check the active stage together with every completed-stage regression.</p>
 		</section>
 		<div class="sticky-actions">
-			<button class="action" type="button" data-action="${ChallengeViewAction.RunChecks}">Run checks</button>
+			<button class="action" type="button" data-action="${ChallengeViewAction.SelectAttemptLevel}" data-level-id="${escapeHtml(snapshot.attempt.activeLevelId)}">Return to current stage</button>
 		</div>`;
 	}
 
-	const result = snapshot.latestTestResult;
-	const passed = result.passed;
-	const staleAfterRefactor = snapshot.status === SessionStatus.Refactoring;
-	const heading = staleAfterRefactor
-		? 'Previous check passed'
-		: passed ? 'All checks passed' : 'Some checks need attention';
-	const summaryClass = passed ? SessionStatus.Passed : SessionStatus.Failed;
-	const summarySymbol = passed ? '✓' : '×';
-	const passedCount = result.testCases.filter((testCase) => testCase.passed).length;
-	const failedCount = result.testCases.length - passedCount;
-	const currentTests = result.testCases.filter(
-		(testCase) => testCase.category === TestCategory.Current,
-	);
-	const regressionTests = result.testCases.filter(
-		(testCase) => testCase.category === TestCategory.Regression,
-	);
-
-	return `${staleAfterRefactor ? `<div class="callout callout-refactor">
-		<strong>Rerun required</strong>
-		<p class="small">This result predates your refactor. Continuing stays locked until the checks pass again.</p>
-	</div>` : ''}
-		<section class="card" aria-live="polite">
-			<div class="check-summary">
-				<span class="check-icon check-icon-${summaryClass}" aria-hidden="true">${summarySymbol}</span>
-				<div>
-					<p class="eyebrow">Prototype check · ${escapeHtml(formatEnumLabel(result.mode))}</p>
-					<h2>${escapeHtml(heading)}</h2>
-					<div class="run-meta">
-						<span>Attempt ${result.attempt}</span>
-						<span>${passedCount} passed</span>
-						${failedCount > 0 ? `<span>${failedCount} failed</span>` : ''}
-						<span>${formatDuration(result.durationMilliseconds)}</span>
-					</div>
-				</div>
-			</div>
-			${renderTestGroup('Current-stage checks', currentTests)}
-			${renderTestGroup('Regression checks', regressionTests)}
-		</section>
-		${passed && !staleAfterRefactor ? renderImpactPreview(snapshot) : ''}
-		${renderEvidenceAction(snapshot)}`;
-}
-
-function renderTestGroup(title: string, tests: TestCaseResult[]): string {
-	if (tests.length === 0) {
-		return '';
-	}
-
-	return `<h3>${escapeHtml(title)}</h3>
-		<ul class="test-list">
-			${tests.map((testCase) => `<li class="test-case test-case-${testCase.passed ? SessionStatus.Passed : SessionStatus.Failed}">
-				<span class="test-mark" aria-hidden="true">${testCase.passed ? '✓' : '×'}</span>
-				<span>${escapeHtml(testCase.name)}</span>
-				<span class="test-duration">${formatDuration(testCase.durationMilliseconds)}</span>
-				${testCase.details ? `<span class="test-details">${escapeHtml(testCase.details)}</span>` : ''}
-			</li>`).join('')}
-		</ul>`;
-}
-
-function renderRunningEvidence(snapshot: PrototypeSessionSnapshot): string {
-	const progress = snapshot.testProgress;
-	if (!progress) {
+	if (snapshot.testStatus === 'running') {
 		return `<section class="card" aria-live="polite" aria-busy="true">
-			<p><span class="spinner" aria-hidden="true"></span><strong>Discovering checks…</strong></p>
-			<p class="small muted">Preparing current-stage and regression coverage.</p>
+			<p class="eyebrow">Local test evidence</p>
+			<h2><span class="spinner" aria-hidden="true"></span>Running public tests…</h2>
+			<p class="small muted">Checking the current requirement and replaying completed stages against your learner folder.</p>
 		</section>`;
 	}
 
-	const activeTest = progress.testCases.find(
-		(testCase) => testCase.status === TestCaseStatus.Running,
-	);
-	const percentComplete = progress.totalCount === 0
-		? 0
-		: Math.round((progress.completedCount / progress.totalCount) * 100);
-	const currentTests = progress.testCases.filter(
-		(testCase) => testCase.category === TestCategory.Current,
-	);
-	const regressionTests = progress.testCases.filter(
-		(testCase) => testCase.category === TestCategory.Regression,
-	);
-	const heading = progress.completedCount === progress.totalCount
-		? 'Finalizing results…'
-		: `Running check ${progress.completedCount + 1} of ${progress.totalCount}`;
+	const evidence = snapshot.latestTestEvidence;
+	if (!evidence) {
+		return `<section class="card">
+			<p class="eyebrow">Local test evidence</p>
+			<h2>Not run yet</h2>
+			<p class="muted">Run the current level's public tests and every completed level's regression tests against your saved learner code.</p>
+			<h3>Evidence captured</h3>
+			<ul>
+				<li>Passed and failed checks</li>
+				<li>Exit status and timeout</li>
+				<li>pytest version and source-code hash</li>
+			</ul>
+		</section>
+		<div class="sticky-actions">
+			<button class="action" type="button" data-action="${ChallengeViewAction.RunChecks}">Run public tests</button>
+		</div>`;
+	}
 
-	return `<section class="card" aria-live="polite" aria-busy="true">
-		<p class="eyebrow">Prototype check · Simulated</p>
-		<h2><span class="spinner" aria-hidden="true"></span>${escapeHtml(heading)}</h2>
-		<p class="small muted">${activeTest ? escapeHtml(activeTest.name) : 'Preparing the next check…'}</p>
-		<div
-			class="run-progress"
-			role="progressbar"
-			aria-label="Test run progress"
-			aria-valuemin="0"
-			aria-valuemax="100"
-			aria-valuenow="${percentComplete}"
-		>
-			<div class="run-progress-bar" style="width: ${percentComplete}%"></div>
+	const currentTests = evidence.testCases.filter((testCase) => testCase.category === 'current');
+	const regressionTests = evidence.testCases.filter((testCase) => testCase.category === 'regression');
+	const heading = evidence.passed ? 'All public tests passed' : 'Some tests need attention';
+	const statusClass = evidence.passed ? 'passed' : 'failed';
+
+	return `<section class="card" aria-live="polite">
+		<div class="check-summary">
+			<span class="check-icon check-icon-${statusClass}" aria-hidden="true">${evidence.passed ? '✓' : '×'}</span>
+			<div class="check-summary-content">
+				<p class="eyebrow">Local test evidence</p>
+				<h2>${heading}</h2>
+				<div class="run-meta">
+					<span>${evidence.passedCount} passed</span>
+					${evidence.failedCount > 0 ? `<span>${evidence.failedCount} failed</span>` : ''}
+					<span>${formatDuration(evidence.durationMilliseconds)}</span>
+				</div>
+			</div>
 		</div>
-		<div class="run-meta">
-			<span>Attempt ${progress.attempt}</span>
-			<span>${progress.completedCount} of ${progress.totalCount} complete</span>
-		</div>
-		${renderProgressGroup('Current-stage checks', currentTests)}
-		${renderProgressGroup('Regression checks', regressionTests)}
-	</section>`;
+		${renderCurrentTests(currentTests, snapshot.level.title)}
+		${renderRegressionTests(regressionTests)}
+		<details class="run-details">
+			<summary>Run details</summary>
+			<dl class="evidence-details">
+				<div><dt>Runner</dt><dd>${escapeHtml(evidence.runnerVersion)}</dd></div>
+				<div><dt>Exit status</dt><dd>${evidence.exitCode === null ? 'No exit status' : evidence.exitCode}</dd></div>
+				<div><dt>Timed out</dt><dd>${evidence.timedOut ? 'Yes' : 'No'}</dd></div>
+				<div><dt>Code hash</dt><dd><code title="${escapeHtml(evidence.codeHash)}">${escapeHtml(evidence.codeHash.slice(0, 12))}</code></dd></div>
+			</dl>
+		</details>
+	</section>
+	<div class="sticky-actions">
+		<button class="action" type="button" data-action="${ChallengeViewAction.RunChecks}">Run tests again</button>
+	</div>`;
 }
 
-function renderProgressGroup(title: string, tests: TestCaseProgress[]): string {
+function renderCurrentTests(tests: NormalizedTestCase[], levelTitle: string): string {
 	if (tests.length === 0) {
 		return '';
 	}
 
-	return `<h3>${escapeHtml(title)}</h3>
-		<ul class="test-list">
-			${tests.map((testCase) => `<li class="test-case test-case-${testCase.status}">
-				<span class="test-mark" aria-hidden="true">${testStatusSymbol(testCase.status)}</span>
-				<span>${escapeHtml(testCase.name)}</span>
-				${testCase.durationMilliseconds === undefined ? '' : `<span class="test-duration">${formatDuration(testCase.durationMilliseconds)}</span>`}
-				${testCase.details ? `<span class="test-details">${escapeHtml(testCase.details)}</span>` : ''}
-			</li>`).join('')}
-		</ul>`;
-}
+	const failedTests = tests.filter((testCase) => testCase.status === 'failed');
+	const passedTests = tests.filter((testCase) => testCase.status === 'passed');
+	const status = failedTests.length === 0
+		? `All ${tests.length} passed`
+		: `${failedTests.length} of ${tests.length} failed`;
 
-function renderImpactPreview(snapshot: PrototypeSessionSnapshot): string {
-	const level = snapshot.challenge?.currentLevelNumber ?? 1;
-	const metrics = [
-		['Files changed', String(level === 3 ? 2 : 1)],
-		['Methods affected', String(level + 1)],
-		['Public API changes', '0'],
-		['Regression failures', '0'],
-	];
-
-	return `<section class="card">
-		<p class="eyebrow">Prototype preview · Simulated</p>
-		<h2>Change impact</h2>
-		<div class="metric-list">
-			${metrics.map(([label, value]) => `<div class="metric">
-				<span>${escapeHtml(label)}</span>
-				<span class="metric-value">${escapeHtml(value)}</span>
-			</div>`).join('')}
+	return `<section class="test-group">
+		<div class="test-group-heading">
+			<div>
+				<p class="eyebrow">Current requirement</p>
+				<h3>${escapeHtml(levelTitle)}</h3>
+			</div>
+			<span>${status}</span>
 		</div>
-		<p class="small muted">Change impact is evidence, not a design score. More change can be the right engineering decision.</p>
+		${renderTestList(failedTests, false)}
+		${renderPassedTests(passedTests, false, `${passedTests.length} current tests passed`)}
 	</section>`;
 }
 
-function renderEvidenceAction(snapshot: PrototypeSessionSnapshot): string {
-	const challenge = snapshot.challenge;
-	if (challenge && !challenge.isViewingLatestLevel) {
-		return `<div class="sticky-actions">
-			<button class="action" type="button" data-action="${ChallengeViewAction.SelectLevel}" data-level-number="${challenge.latestUnlockedLevelNumber}">Return to stage ${challenge.latestUnlockedLevelNumber}</button>
-		</div>`;
+function renderRegressionTests(tests: NormalizedTestCase[]): string {
+	if (tests.length === 0) {
+		return '';
 	}
 
-	if (snapshot.status === SessionStatus.Failed) {
-		return `<div class="sticky-actions">
-			<button class="action" type="button" data-action="${ChallengeViewAction.RunChecks}">Simulate fix and rerun</button>
-		</div>`;
+	const failedTests = tests.filter((testCase) => testCase.status === 'failed');
+	const passedTests = tests.filter((testCase) => testCase.status === 'passed');
+	const allPassed = failedTests.length === 0;
+	return `<section class="test-group regression-group">
+		<div class="test-group-heading">
+			<div>
+				<p class="eyebrow">Regression safety net</p>
+				<h3>${allPassed
+					? `All ${tests.length} previous-level tests passed`
+					: `${failedTests.length} previous-level ${failedTests.length === 1 ? 'test failed' : 'tests failed'}`}</h3>
+			</div>
+			<span class="group-status group-status-${allPassed ? 'passed' : 'failed'}" aria-hidden="true">${allPassed ? '✓' : '×'}</span>
+		</div>
+		${renderRegressionLevelSummary(tests)}
+		${renderTestList(failedTests, true)}
+		${renderPassedTests(
+			passedTests,
+			true,
+			allPassed ? 'Show regression tests' : `${passedTests.length} regression tests passed`,
+		)}
+	</section>`;
+}
+
+function renderRegressionLevelSummary(tests: NormalizedTestCase[]): string {
+	const levels = new Map<string, NormalizedTestCase[]>();
+	for (const testCase of tests) {
+		const levelTests = levels.get(testCase.levelId) ?? [];
+		levelTests.push(testCase);
+		levels.set(testCase.levelId, levelTests);
 	}
 
-	if (snapshot.status === SessionStatus.Refactoring) {
-		return `<div class="sticky-actions">
-			<button class="action" type="button" data-action="${ChallengeViewAction.SelectSection}" data-section="${ChallengeSection.Build}">Return to refactor</button>
-		</div>`;
+	return `<ul class="regression-levels">
+		${[...levels].map(([levelId, levelTests]) => {
+			const passedCount = levelTests.filter((testCase) => testCase.status === 'passed').length;
+			return `<li><span>${escapeHtml(formatLevelName(levelId))}</span><strong>${passedCount}/${levelTests.length}</strong></li>`;
+		}).join('')}
+	</ul>`;
+}
+
+function renderPassedTests(
+	tests: NormalizedTestCase[],
+	showLevel: boolean,
+	label: string,
+): string {
+	if (tests.length === 0) {
+		return '';
 	}
 
-	return `<div class="sticky-actions">
-		<button class="action" type="button" data-action="${ChallengeViewAction.SelectSection}" data-section="${ChallengeSection.Design}">Review ${escapeHtml(ChallengeSection.Design.toLowerCase())}</button>
+	return `<details class="passed-tests">
+		<summary><span aria-hidden="true">✓</span> ${escapeHtml(label)}</summary>
+		${renderTestList(tests, showLevel)}
+	</details>`;
+}
+
+function renderTestList(tests: NormalizedTestCase[], showLevel: boolean): string {
+	if (tests.length === 0) {
+		return '';
+	}
+
+	return `<ul class="test-list">
+		${tests.map((testCase) => renderTestCase(testCase, showLevel)).join('')}
+	</ul>`;
+}
+
+function renderTestCase(testCase: NormalizedTestCase, showLevel: boolean): string {
+	const passed = testCase.status === 'passed';
+	return `<li class="test-case test-case-${passed ? 'passed' : 'failed'}">
+		<div class="test-case-heading">
+			<span class="test-mark" aria-hidden="true">${passed ? '✓' : '×'}</span>
+			<div class="test-case-copy">
+				<strong class="test-name" title="${escapeHtml(testCase.name)}">${escapeHtml(formatTestName(testCase.name))}</strong>
+				${showLevel ? `<span class="test-level">${escapeHtml(formatLevelName(testCase.levelId))}</span>` : ''}
+			</div>
+		</div>
+		${testCase.details ? renderFailureDetails(testCase.details, testCase.name) : ''}
+	</li>`;
+}
+
+function renderFailureDetails(details: string, testName: string): string {
+	const { location, message } = splitFailureDetails(details);
+	const comparison = parseEqualityAssertion(message);
+	return `<div class="test-failure">
+		${comparison ? `<div class="failure-comparison">
+			<div><span>Expected</span><code>${escapeHtml(comparison.expected)}</code></div>
+			<div><span>Received</span><code>${escapeHtml(comparison.received)}</code></div>
+		</div>` : `<p class="failure-message">${escapeHtml(message)}</p>`}
+		${location ? renderOpenTestCaseAction(location, testName) : ''}
 	</div>`;
+}
+
+function renderOpenTestCaseAction(location: string, testName: string): string {
+	const testPath = location.split('::', 1)[0];
+	const functionName = testName.split('[', 1)[0];
+	return `<button
+		class="test-source-link"
+		type="button"
+		data-action="${ChallengeViewAction.OpenTestCase}"
+		data-test-path="${escapeHtml(testPath)}"
+		data-test-name="${escapeHtml(functionName)}"
+	>Open test case ↗</button>`;
+}
+
+function splitFailureDetails(details: string): {
+	location?: string;
+	message: string;
+} {
+	const separatorIndex = details.indexOf(' - ');
+	if (separatorIndex < 0) {
+		return { message: details };
+	}
+
+	return {
+		location: details.slice(0, separatorIndex).trim(),
+		message: details.slice(separatorIndex + 3).trim(),
+	};
+}
+
+function parseEqualityAssertion(message: string): {
+	expected: string;
+	received: string;
+} | undefined {
+	const match = /^AssertionError:\s*assert\s+(.+?)\s*==\s*(.+)$/s.exec(message);
+	if (!match) {
+		return undefined;
+	}
+
+	return {
+		received: match[1].trim(),
+		expected: match[2].trim(),
+	};
+}
+
+function formatTestName(name: string): string {
+	const readableName = name.replace(/^test_/, '').replaceAll('_', ' ');
+	return readableName.length === 0
+		? name
+		: `${readableName[0].toUpperCase()}${readableName.slice(1)}`;
+}
+
+function formatLevelName(levelId: string): string {
+	return levelId
+		.split('-')
+		.map((word) => `${word[0]?.toUpperCase() ?? ''}${word.slice(1)}`)
+		.join(' ');
 }

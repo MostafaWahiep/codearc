@@ -5,12 +5,9 @@ export enum ChallengeViewAction {
 	BackToCatalog = 'backToCatalog',
 	RetryAttempts = 'retryAttempts',
 	RetryCatalog = 'retryCatalog',
-	Restart = 'restart',
 	RunChecks = 'runChecks',
 	SelectSection = 'selectSection',
-	SelectLevel = 'selectLevel',
 	SelectAttemptLevel = 'selectAttemptLevel',
 	OpenWorkspace = 'openWorkspace',
-	BeginRefactor = 'beginRefactor',
-	Next = 'next',
+	OpenTestCase = 'openTestCase',
 }

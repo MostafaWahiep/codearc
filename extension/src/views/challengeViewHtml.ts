@@ -2,14 +2,12 @@ import { randomBytes } from 'node:crypto';
 import type { AttemptCatalogSnapshot } from '../application/AttemptCatalog';
 import type { AttemptSessionSnapshot } from '../application/AttemptSession';
 import type { ChallengeCatalogSnapshot } from '../application/ChallengeCatalog';
-import type { PrototypeSessionSnapshot } from '../application/PrototypeSession';
 import { ChallengeViewAction } from './ChallengeViewAction';
 import type { MarkdownRenderer } from './MarkdownRenderer';
 import { renderChallenge } from './challengeViewContent';
 import { challengeViewStyles } from './challengeViewStyles';
 
 export async function createChallengeViewHtml(
-	snapshot: PrototypeSessionSnapshot,
 	markdownRenderer: MarkdownRenderer,
 	resources: ChallengeViewResources = {},
 	catalog?: ChallengeCatalogSnapshot,
@@ -18,7 +16,6 @@ export async function createChallengeViewHtml(
 ): Promise<string> {
 	const nonce = randomBytes(16).toString('base64');
 	const body = await renderChallenge(
-		snapshot,
 		markdownRenderer,
 		catalog,
 		attemptCatalog,
@@ -75,18 +72,19 @@ document.addEventListener('click', (event) => {
 		return;
 	}
 
-	if (type !== '${ChallengeViewAction.SelectSection}') {
+	if (type !== '${ChallengeViewAction.SelectSection}'
+		&& type !== '${ChallengeViewAction.OpenTestCase}') {
 		button.disabled = true;
 	}
 
-	const levelNumber = button.dataset.levelNumber;
 	vscode.postMessage({
 		type,
 		challengeId: button.dataset.challengeId,
 		attemptId: button.dataset.attemptId,
 		section: button.dataset.section,
-		levelNumber: levelNumber ? Number(levelNumber) : undefined,
 		levelId: button.dataset.levelId,
+		testPath: button.dataset.testPath,
+		testName: button.dataset.testName,
 	});
 });
 

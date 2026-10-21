@@ -13,11 +13,8 @@ import {
 	ChallengeCatalogStatus,
 	type ChallengeCatalogSnapshot,
 } from '../application/ChallengeCatalog';
-import {
-	ChallengeSection,
-	PrototypeSession,
-	type PrototypeSessionSnapshot,
-} from '../application/PrototypeSession';
+import { ChallengeSection } from '../application/ChallengeSection';
+import type { LocalTestRunner } from '../application/LocalTestRunner';
 import { LearnerWorkspaceService } from '../infrastructure/LearnerWorkspaceService';
 import { ChallengeViewAction } from './ChallengeViewAction';
 import type { MarkdownRenderer } from './MarkdownRenderer';
@@ -27,7 +24,6 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = 'codearc.challengeView';
 
 	private view: vscode.WebviewView | undefined;
-	private snapshot: PrototypeSessionSnapshot;
 	private catalogSnapshot: ChallengeCatalogSnapshot;
 	private attemptCatalogSnapshot: AttemptCatalogSnapshot;
 	private attemptSessionSnapshot: AttemptSessionSnapshot | undefined;
@@ -36,14 +32,13 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 	private markdownHighlightStylesheetUri: string | undefined;
 
 	public constructor(
-		private readonly session: PrototypeSession,
 		private readonly challengeCatalog: ChallengeCatalog,
 		private readonly attemptCatalog: AttemptCatalog,
 		private readonly attemptSession: AttemptSession,
 		private readonly learnerWorkspace: LearnerWorkspaceService,
+		private readonly localTestRunner: LocalTestRunner,
 		private readonly markdownRenderer: MarkdownRenderer,
 	) {
-		this.snapshot = session.getSnapshot();
 		this.catalogSnapshot = challengeCatalog.getSnapshot();
 		this.attemptCatalogSnapshot = attemptCatalog.getSnapshot();
 		this.attemptSessionSnapshot = attemptSession.getSnapshot();
@@ -90,7 +85,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	public async showChallenge(): Promise<void> {
-		if (!this.attemptSessionSnapshot && !this.snapshot.challenge) {
+		if (!this.attemptSessionSnapshot) {
 			await this.startChallenge();
 		}
 	}
@@ -120,9 +115,6 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 				case ChallengeViewAction.RetryAttempts:
 					await this.retryAttempts();
 					return;
-				case ChallengeViewAction.Restart:
-					await this.startNewAttempt(this.requireSelectedChallengeId());
-					return;
 				case ChallengeViewAction.RetryCatalog:
 					await this.loadChallengeCatalog(true);
 					return;
@@ -130,16 +122,9 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 					await this.runChecks();
 					return;
 				case ChallengeViewAction.SelectSection:
-					if (this.attemptSessionSnapshot) {
-						this.attemptSessionSnapshot = this.attemptSession.selectSection(
-							message.section,
-						);
-					} else {
-						this.snapshot = this.session.selectSection(message.section);
-					}
-					break;
-				case ChallengeViewAction.SelectLevel:
-					this.snapshot = this.session.selectLevel(message.levelNumber);
+					this.attemptSessionSnapshot = this.attemptSession.selectSection(
+						message.section,
+					);
 					break;
 				case ChallengeViewAction.SelectAttemptLevel:
 					this.attemptSessionSnapshot = await this.attemptSession.selectLevel(
@@ -150,19 +135,15 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 					await this.openWorkspace();
 					this.render();
 					return;
-				case ChallengeViewAction.BeginRefactor:
-					this.snapshot = this.session.beginRefactor();
-					break;
-				case ChallengeViewAction.Next:
-					this.snapshot = this.session.advanceToNextLevel();
-					break;
+				case ChallengeViewAction.OpenTestCase:
+					await this.openTestCase(message.testPath, message.testName);
+					return;
 			}
 
 			this.render();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			await vscode.window.showErrorMessage(`CodeArc: ${message}`);
-			this.snapshot = this.session.getSnapshot();
 			this.render();
 		}
 	}
@@ -205,29 +186,49 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private async runChecks(): Promise<void> {
-		const checkRun = this.session.runChecks((snapshot) => {
-			this.snapshot = snapshot;
-			this.render();
-		});
-		this.snapshot = this.session.getSnapshot();
-		this.render();
+		const current = this.attemptSessionSnapshot;
+		if (!current) {
+			throw new Error('Open an attempt before running tests.');
+		}
 
-		this.snapshot = await checkRun;
+		this.attemptSessionSnapshot = this.attemptSession.startTestRun();
+		this.render();
+		try {
+			const learnerRoot = await this.learnerWorkspace.ensureWorkspace(
+				current.challenge.id,
+			);
+			const evidence = await this.localTestRunner.run({
+				attemptId: current.attempt.id,
+				workspacePath: learnerRoot.fsPath,
+			});
+			this.attemptSessionSnapshot = this.attemptSession.completeTestRun(evidence);
+		} catch (error) {
+			this.attemptSessionSnapshot = this.attemptSession.cancelTestRun();
+			throw error;
+		}
 		this.render();
 	}
 
 	private async openWorkspace(): Promise<void> {
-		const challenge = this.snapshot.challenge;
-		if (!challenge) {
+		if (!this.attemptSessionSnapshot) {
 			throw new Error('Start the challenge before opening starter code.');
 		}
-		if (!challenge.isViewingLatestLevel) {
-			throw new Error('Return to the latest level before opening the evolving codebase.');
-		}
-
-		await this.learnerWorkspace.openWorkspace(challenge);
+		await this.learnerWorkspace.openWorkspace(
+			this.attemptSessionSnapshot.challenge.id,
+		);
 		void vscode.window.showInformationMessage(
 			'CodeArc opened the learner folder. Your changes will be preserved.',
+		);
+	}
+
+	private async openTestCase(testPath: string, testName: string): Promise<void> {
+		if (!this.attemptSessionSnapshot) {
+			throw new Error('Open an attempt before viewing its public tests.');
+		}
+		await this.learnerWorkspace.openTestCase(
+			this.attemptSessionSnapshot.challenge.id,
+			testPath,
+			testName,
 		);
 	}
 
@@ -269,7 +270,6 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 
 		const revision = ++this.renderRevision;
 		void createChallengeViewHtml(
-			this.snapshot,
 			this.markdownRenderer,
 			{
 				cspSource: view.webview.cspSource,
@@ -300,19 +300,16 @@ type ViewMessage =
 	| { type: ChallengeViewAction.StartNewAttempt; challengeId: string }
 	| { type: ChallengeViewAction.ContinueAttempt; attemptId: string }
 	| { type: ChallengeViewAction.SelectAttemptLevel; levelId: string }
+	| { type: ChallengeViewAction.OpenTestCase; testPath: string; testName: string }
 	| {
 		type:
-			| ChallengeViewAction.Restart
 			| ChallengeViewAction.RetryCatalog
 			| ChallengeViewAction.RetryAttempts
 			| ChallengeViewAction.BackToCatalog
 			| ChallengeViewAction.RunChecks
-			| ChallengeViewAction.OpenWorkspace
-			| ChallengeViewAction.BeginRefactor
-			| ChallengeViewAction.Next;
+			| ChallengeViewAction.OpenWorkspace;
 	}
-	| { type: ChallengeViewAction.SelectSection; section: ChallengeSection }
-	| { type: ChallengeViewAction.SelectLevel; levelNumber: number };
+	| { type: ChallengeViewAction.SelectSection; section: ChallengeSection };
 
 function isViewMessage(value: unknown): value is ViewMessage {
 	if (typeof value !== 'object' || value === null || !('type' in value)) {
@@ -323,11 +320,6 @@ function isViewMessage(value: unknown): value is ViewMessage {
 		return 'section' in value && isChallengeSection(value.section);
 	}
 
-	if (value.type === ChallengeViewAction.SelectLevel) {
-		return 'levelNumber' in value
-			&& typeof value.levelNumber === 'number'
-			&& Number.isInteger(value.levelNumber);
-	}
 	if (value.type === ChallengeViewAction.SelectChallenge
 		|| value.type === ChallengeViewAction.StartNewAttempt) {
 		return 'challengeId' in value
@@ -343,6 +335,14 @@ function isViewMessage(value: unknown): value is ViewMessage {
 		return 'levelId' in value
 			&& typeof value.levelId === 'string'
 			&& value.levelId.length > 0;
+	}
+	if (value.type === ChallengeViewAction.OpenTestCase) {
+		return 'testPath' in value
+			&& typeof value.testPath === 'string'
+			&& value.testPath.length > 0
+			&& 'testName' in value
+			&& typeof value.testName === 'string'
+			&& value.testName.length > 0;
 	}
 
 	return typeof value.type === 'string'

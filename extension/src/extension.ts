@@ -3,13 +3,10 @@ import * as vscode from 'vscode';
 import { AttemptCatalog } from './application/AttemptCatalog';
 import { AttemptSession } from './application/AttemptSession';
 import { ChallengeCatalog } from './application/ChallengeCatalog';
-import { ChallengeController } from './application/ChallengeController';
-import { PrototypeSession } from './application/PrototypeSession';
 import { HttpBackendClient } from './backend/HttpBackendClient';
 import { registerStartChallengeCommand } from './commands/startChallenge';
-import { FileChallengeRepository } from './infrastructure/FileChallengeRepository';
 import { LearnerWorkspaceService } from './infrastructure/LearnerWorkspaceService';
-import { MockTestRunner } from './infrastructure/MockTestRunner';
+import { PytestRunner } from './infrastructure/PytestRunner';
 import { VsCodeMarkdownRenderer } from './infrastructure/VsCodeMarkdownRenderer';
 import { ChallengeViewProvider } from './views/ChallengeViewProvider';
 
@@ -29,17 +26,24 @@ export function activate(context: vscode.ExtensionContext) {
 		'search-engine',
 		'v1',
 	);
-	const repository = new FileChallengeRepository(challengeRoot);
-	const controller = new ChallengeController(repository);
-	const session = new PrototypeSession(controller, new MockTestRunner());
-	const learnerWorkspace = new LearnerWorkspaceService(context.globalStorageUri);
+	const learnerWorkspace = new LearnerWorkspaceService(
+		context.globalStorageUri,
+		[
+			{
+				challengeId: 'search-engine',
+				starterPath: path.join(challengeRoot, 'starter'),
+				entrypointPath: path.join(challengeRoot, 'starter', 'search_engine.py'),
+			},
+		],
+	);
+	const localTestRunner = new PytestRunner(backendClient);
 	const markdownRenderer = new VsCodeMarkdownRenderer();
 	const viewProvider = new ChallengeViewProvider(
-		session,
 		challengeCatalog,
 		attemptCatalog,
 		attemptSession,
 		learnerWorkspace,
+		localTestRunner,
 		markdownRenderer,
 	);
 
