@@ -152,6 +152,50 @@ suite('HttpBackendClient', () => {
 		);
 	});
 
+	test('submits local test results and returns backend-approved progression', async () => {
+		const calls: Array<{ url: string; init?: RequestInit }> = [];
+		const updatedAttempt = attemptResponse();
+		updatedAttempt.activeLevelId = 'prefix-search';
+		const client = createClient(async (url, init) => {
+			calls.push({ url, init });
+			return jsonResponse({
+				outcome: 'level_completed',
+				attempt: updatedAttempt,
+				completedLevelId: 'single-term-search',
+			});
+		});
+
+		const result = await client.submitTestResults(
+			'22222222-2222-4222-8222-222222222222',
+			{
+				levelId: 'single-term-search',
+				exitCode: 0,
+				timedOut: false,
+				passedCount: 6,
+				failedCount: 0,
+			},
+		);
+
+		assert.strictEqual(result.outcome, 'level_completed');
+		assert.strictEqual(result.completedLevelId, 'single-term-search');
+		assert.strictEqual(result.attempt.activeLevelId, 'prefix-search');
+		assert.strictEqual(
+			calls[0].url,
+			`${backendUrl}/attempts/22222222-2222-4222-8222-222222222222/submissions`,
+		);
+		assert.strictEqual(calls[0].init?.method, 'POST');
+		assert.deepStrictEqual(
+			JSON.parse(calls[0].init?.body as string),
+			{
+				levelId: 'single-term-search',
+				exitCode: 0,
+				timedOut: false,
+				passedCount: 6,
+				failedCount: 0,
+			},
+		);
+	});
+
 	test('surfaces the server error message and status', async () => {
 		const client = createClient(async () => jsonResponse(
 			{ message: "Challenge 'unknown' was not found" },

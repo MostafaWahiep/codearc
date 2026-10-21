@@ -4,6 +4,8 @@ import type {
 	ChallengeSummaryDto,
 	VisibleLevelDto,
 	PublicTestBundleDto,
+	TestSubmission,
+	TestSubmissionResultDto,
 } from './BackendTypes';
 
 export interface BackendClient {
@@ -27,4 +29,9 @@ export interface BackendClient {
 	): Promise<VisibleLevelDto>;
 
 	getVisibleTests(attemptId: string): Promise<PublicTestBundleDto>;
+
+	submitTestResults(
+		attemptId: string,
+		testSubmission: TestSubmission,
+	): Promise<TestSubmissionResultDto>;
 }

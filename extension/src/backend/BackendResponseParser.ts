@@ -11,12 +11,15 @@ import type {
 	VisibleLevelDto,
 	PublicTestBundleDto,
 	PublicTestCategory,
+	TestSubmissionResultDto,
+	TestSubmissionOutcome,
 } from './BackendTypes';
 
 const attemptStatuses: AttemptStatus[] = ['in_progress', 'completed'];
 const levelProgressStatuses: LevelProgressStatus[] = ['active', 'completed'];
 const levelSectionDisplays = Object.values(LevelSectionDisplay);
 const publicTestCategories: PublicTestCategory[] = ['current', 'regression'];
+const testSubmissionOutcomes: TestSubmissionOutcome[] = ['tests_failed', 'level_completed', 'attempt_completed'];
 
 export function parseChallengeSummaries(
 	value: unknown,
@@ -157,6 +160,28 @@ export function parsePublicTestBundle(
 					),
 				};
 			}),
+		};
+	});
+}
+
+export function parseTestResult(
+	value: unknown,
+	method: string,
+	path: string,
+): TestSubmissionResultDto {
+	return parseResponse(method, path, () => {
+		const result = expectObject(value, 'response');
+		return {
+			outcome: expectOneOf(
+				result.outcome,
+				testSubmissionOutcomes,
+				'response.outcome',
+			),
+			attempt: parseAttempt(result.attempt, method, path),
+			completedLevelId: expectNullableString(
+				result.completedLevelId,
+				'response.completedLevelId',
+			),
 		};
 	});
 }

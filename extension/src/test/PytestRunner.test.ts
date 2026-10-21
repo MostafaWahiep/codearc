@@ -169,6 +169,9 @@ function createBackendClient(bundle: PublicTestBundleDto): BackendClient {
 		getAttempt: async () => { throw new Error('Not used'); },
 		getVisibleLevel: async () => { throw new Error('Not used'); },
 		getVisibleTests: async () => bundle,
+		submitTestResults: async () => {
+			throw new Error('Not used');
+		}
 	};
 }
 

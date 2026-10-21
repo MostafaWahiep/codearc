@@ -70,3 +70,19 @@ export interface AttemptDto {
 	activeLevelId: string;
 	levels: LevelProgressDto[];
 }
+
+export interface TestSubmission {
+	levelId: string;
+	exitCode: number;
+	timedOut: boolean;
+	passedCount: number;
+	failedCount: number;
+}
+
+export type TestSubmissionOutcome = 'tests_failed' | 'level_completed' | 'attempt_completed';
+
+export interface TestSubmissionResultDto {
+	outcome: TestSubmissionOutcome;
+	attempt: AttemptDto;
+	completedLevelId: string | null;
+}

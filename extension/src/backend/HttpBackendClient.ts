@@ -10,6 +10,7 @@ import {
 	parseChallengeSummaries,
 	parseVisibleLevel,
 	parsePublicTestBundle,
+	parseTestResult,
 } from './BackendResponseParser';
 import type {
 	AttemptDto,
@@ -17,6 +18,8 @@ import type {
 	ChallengeSummaryDto,
 	VisibleLevelDto,
 	PublicTestBundleDto,
+	TestSubmission,
+	TestSubmissionResultDto,
 } from './BackendTypes';
 
 export type BackendFetch = (
@@ -90,6 +93,16 @@ export class HttpBackendClient implements BackendClient {
 		const path = `/attempts/${encodeURIComponent(attemptId)}/tests`;
 		const response = await this.request(method, path);
 		return parsePublicTestBundle(response, method, path);
+	}
+
+	public async submitTestResults(
+		attemptId: string,
+		testSubmission: TestSubmission,
+	): Promise<TestSubmissionResultDto> {
+		const method = 'POST';
+		const path = `/attempts/${encodeURIComponent(attemptId)}/submissions`;
+		const response = await this.request(method, path, {...testSubmission});
+		return parseTestResult(response, method, path);
 	}
 
 	private async request(

@@ -110,6 +110,11 @@ function createBackendClient(): BackendClient {
 		getVisibleLevel: async (_attemptId, levelId) =>
 			visibleLevel(levelId, 'active'),
 		getVisibleTests: async () => ({ runner: 'pytest', files: [] }),
+		submitTestResults: async () => ({
+			outcome: 'tests_failed',
+			attempt: openedAttempt().attempt,
+			completedLevelId: null,
+		}),
 	};
 }
 
