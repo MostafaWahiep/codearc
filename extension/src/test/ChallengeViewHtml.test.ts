@@ -213,5 +213,7 @@ function createAttemptSessionSnapshot(): AttemptSessionSnapshot {
 		},
 		selectedSection: ChallengeSection.Build,
 		testStatus: 'idle',
+		submissionStatus: 'idle',
+		submissionError: undefined,
 	};
 }

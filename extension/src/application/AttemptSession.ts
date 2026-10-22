@@ -2,6 +2,7 @@ import type { BackendClient } from '../backend/BackendClient';
 import type {
 	AttemptDto,
 	ChallengeSummaryDto,
+	TestSubmission,
 	VisibleLevelDto,
 } from '../backend/BackendTypes';
 import type { OpenedAttempt } from './AttemptCatalog';
@@ -9,6 +10,11 @@ import type { TestEvidence } from './LocalTestRunner';
 import { ChallengeSection } from './ChallengeSection';
 
 export type AttemptTestStatus = 'idle' | 'running' | 'passed' | 'failed';
+export type AttemptSubmissionStatus =
+	| 'idle'
+	| 'submitting'
+	| 'accepted'
+	| 'rejected';
 
 export interface AttemptSessionSnapshot {
 	challenge: ChallengeSummaryDto;
@@ -16,6 +22,8 @@ export interface AttemptSessionSnapshot {
 	level: VisibleLevelDto;
 	selectedSection: ChallengeSection;
 	testStatus: AttemptTestStatus;
+	submissionStatus: AttemptSubmissionStatus;
+	submissionError?: string;
 	latestTestEvidence?: TestEvidence;
 }
 
@@ -47,6 +55,8 @@ export class AttemptSession {
 			level: openedAttempt.level,
 			selectedSection: ChallengeSection.Build,
 			testStatus: 'idle',
+			submissionStatus: 'idle',
+			submissionError: undefined,
 		};
 		return this.getRequiredSnapshot();
 	}
@@ -67,6 +77,8 @@ export class AttemptSession {
 				selectedSection: ChallengeSection.Build,
 				testStatus: 'idle',
 				latestTestEvidence: undefined,
+				submissionStatus: 'idle',
+				submissionError: undefined,
 			};
 		}
 
@@ -82,6 +94,8 @@ export class AttemptSession {
 			...current,
 			selectedSection: ChallengeSection.Results,
 			testStatus: 'running',
+			submissionStatus: 'idle',
+			submissionError: undefined,
 		};
 		return this.getRequiredSnapshot();
 	}
@@ -122,6 +136,60 @@ export class AttemptSession {
 		this.snapshot = undefined;
 	}
 
+	public async submitTestResults(): Promise<AttemptSessionSnapshot> {
+		const submission = this.createTestSubmission();
+		const current = this.startSubmission();
+		const revision = ++this.revision;
+
+		try {
+			const result = await this.backendClient.submitTestResults(
+				current.attempt.id,
+				submission,
+			);
+
+			if (revision === this.revision) {
+				this.snapshot = {
+					...current,
+					attempt: result.attempt,
+					submissionStatus: 'accepted',
+					submissionError: undefined,
+				};
+			}
+			return this.getRequiredSnapshot();
+		} catch (error) {
+			if (revision === this.revision) {
+				const message = error instanceof Error ? error.message : String(error);
+				this.snapshot = {
+					...current,
+					submissionStatus: 'rejected',
+					submissionError: message,
+				};
+			}
+			throw error;
+		}
+	}
+
+	public createTestSubmission(): TestSubmission {
+		const current = this.getRequiredSnapshot();
+		const evidence = current.latestTestEvidence;
+
+		if (!evidence) {
+			throw new Error('No test evidence available to create a submission.');
+		}
+
+		if (evidence.exitCode === null) {
+			throw new Error('Test evidence must include an exit code.');
+		}
+
+		return {
+			levelId: current.attempt.activeLevelId,
+			exitCode: evidence.exitCode,
+			timedOut: evidence.timedOut,
+			passedCount: evidence.passedCount,
+			failedCount: evidence.failedCount,
+		};
+	}
+
 	public getSnapshot(): AttemptSessionSnapshot | undefined {
 		return this.snapshot
 			? {
@@ -144,6 +212,19 @@ export class AttemptSession {
 					: undefined,
 			}
 			: undefined;
+	}
+
+	private startSubmission(): AttemptSessionSnapshot {
+		const current = this.getRequiredSnapshot();
+		if (current.submissionStatus === 'submitting') {
+			throw new Error('A CodeArc submission is already in progress.');
+		}
+		this.snapshot = {
+			...current,
+			submissionStatus: 'submitting',
+			submissionError: undefined,
+		};
+		return this.getRequiredSnapshot();
 	}
 
 	private getRequiredSnapshot(): AttemptSessionSnapshot {
