@@ -72,7 +72,8 @@ suite('Challenge view rendering', () => {
 		assert.match(html, /Stage 3 is locked/);
 		assert.match(html, /Design · Locked/);
 		assert.match(html, /Open challenge folder/);
-		assert.match(html, /Run public tests/);
+		assert.match(html, /Run checks/);
+		assert.match(html, /Submit solution/);
 	});
 
 	test('renders normalized local test evidence', async () => {
@@ -150,7 +151,66 @@ suite('Challenge view rendering', () => {
 		assert.match(html, /Consider an inverted index\./);
 		assert.doesNotMatch(html, /Design is locked/);
 	});
+
+	test('renders submission controls and backend submission state', async () => {
+		const snapshot = createAttemptSessionSnapshot();
+		snapshot.selectedSection = ChallengeSection.Results;
+
+		let html = await renderChallenge(
+			markdownRenderer,
+			createCatalogSnapshot(),
+			undefined,
+			snapshot,
+		);
+
+		assert.match(html, /data-action="submitSolution"/);
+		assert.match(html, /Submit solution/);
+
+		snapshot.testStatus = 'passed';
+		snapshot.submissionStatus = 'submitting';
+		snapshot.latestTestEvidence = passingTestEvidence();
+		html = await renderChallenge(
+			markdownRenderer,
+			createCatalogSnapshot(),
+			undefined,
+			snapshot,
+		);
+		assert.match(html, /Submitting to CodeArc/);
+		assert.doesNotMatch(html, /Submit solution/);
+
+		snapshot.submissionStatus = 'rejected';
+		snapshot.submissionError = 'The submitted level is stale.';
+		html = await renderChallenge(
+			markdownRenderer,
+			createCatalogSnapshot(),
+			undefined,
+			snapshot,
+		);
+		assert.match(html, /could not accept this submission/);
+		assert.match(html, /submitted level is stale/);
+	});
 });
+
+function passingTestEvidence() {
+	return {
+		passed: true,
+		passedCount: 1,
+		failedCount: 0,
+		totalCount: 1,
+		failures: [],
+		testCases: [{
+			name: 'test_prefix',
+			levelId: 'prefix-search',
+			category: 'current' as const,
+			status: 'passed' as const,
+		}],
+		exitCode: 0,
+		timedOut: false,
+		runnerVersion: 'pytest 9.0.0',
+		codeHash: '1234567890abcdef',
+		durationMilliseconds: 125,
+	};
+}
 
 function createCatalogSnapshot(): ChallengeCatalogSnapshot {
 	return {

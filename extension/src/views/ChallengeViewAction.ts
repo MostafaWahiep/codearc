@@ -10,4 +10,5 @@ export enum ChallengeViewAction {
 	SelectAttemptLevel = 'selectAttemptLevel',
 	OpenWorkspace = 'openWorkspace',
 	OpenTestCase = 'openTestCase',
+	SubmitSolution = 'submitSolution',
 }

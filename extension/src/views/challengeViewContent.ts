@@ -189,7 +189,8 @@ async function renderAttemptSection(
 			<div class="sticky-actions">
 				<button class="action action-secondary" type="button" data-action="${ChallengeViewAction.OpenWorkspace}">Open challenge folder</button>
 				${active
-					? `<button class="action" type="button" data-action="${ChallengeViewAction.RunChecks}">Run public tests</button>`
+					? `<button class="action action-secondary" type="button" data-action="${ChallengeViewAction.RunChecks}">Run checks</button>
+						<button class="action" type="button" data-action="${ChallengeViewAction.SubmitSolution}">Submit solution</button>`
 					: `<button class="action" type="button" data-action="${ChallengeViewAction.SelectAttemptLevel}" data-level-id="${escapeHtml(snapshot.attempt.activeLevelId)}">Return to current stage</button>`}
 			</div>`;
 		}

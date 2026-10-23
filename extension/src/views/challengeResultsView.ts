@@ -23,6 +23,14 @@ export function renderBackendResults(snapshot: AttemptSessionSnapshot): string {
 		</section>`;
 	}
 
+	if (snapshot.submissionStatus === 'submitting') {
+		return `<section class="card" aria-live="polite" aria-busy="true">
+			<p class="eyebrow">Backend review</p>
+			<h2><span class="spinner" aria-hidden="true"></span>Submitting to CodeArc…</h2>
+			<p class="small muted">Your checks finished locally. CodeArc is now recording this attempt and deciding whether the next stage can be unlocked.</p>
+		</section>`;
+	}
+
 	const evidence = snapshot.latestTestEvidence;
 	if (!evidence) {
 		return `<section class="card">
@@ -37,7 +45,8 @@ export function renderBackendResults(snapshot: AttemptSessionSnapshot): string {
 			</ul>
 		</section>
 		<div class="sticky-actions">
-			<button class="action" type="button" data-action="${ChallengeViewAction.RunChecks}">Run public tests</button>
+			<button class="action action-secondary" type="button" data-action="${ChallengeViewAction.RunChecks}">Run checks</button>
+			<button class="action" type="button" data-action="${ChallengeViewAction.SubmitSolution}">Submit solution</button>
 		</div>`;
 	}
 
@@ -47,6 +56,7 @@ export function renderBackendResults(snapshot: AttemptSessionSnapshot): string {
 	const statusClass = evidence.passed ? 'passed' : 'failed';
 
 	return `<section class="card" aria-live="polite">
+		${renderSubmissionNotice(snapshot)}
 		<div class="check-summary">
 			<span class="check-icon check-icon-${statusClass}" aria-hidden="true">${evidence.passed ? '✓' : '×'}</span>
 			<div class="check-summary-content">
@@ -72,8 +82,26 @@ export function renderBackendResults(snapshot: AttemptSessionSnapshot): string {
 		</details>
 	</section>
 	<div class="sticky-actions">
-		<button class="action" type="button" data-action="${ChallengeViewAction.RunChecks}">Run tests again</button>
+		<button class="action action-secondary" type="button" data-action="${ChallengeViewAction.RunChecks}">Run checks again</button>
+		<button class="action" type="button" data-action="${ChallengeViewAction.SubmitSolution}">Submit solution</button>
 	</div>`;
+}
+
+function renderSubmissionNotice(snapshot: AttemptSessionSnapshot): string {
+	if (snapshot.submissionStatus === 'rejected') {
+		return `<section class="submission-notice submission-notice-rejected" role="alert">
+			<strong>CodeArc could not accept this submission.</strong>
+			<p class="small">${escapeHtml(snapshot.submissionError ?? 'Try submitting again.')}</p>
+		</section>`;
+	}
+
+	if (snapshot.submissionStatus === 'accepted') {
+		return `<section class="submission-notice submission-notice-accepted">
+			<strong>Submission recorded by CodeArc.</strong>
+		</section>`;
+	}
+
+	return '';
 }
 
 function renderCurrentTests(tests: NormalizedTestCase[], levelTitle: string): string {

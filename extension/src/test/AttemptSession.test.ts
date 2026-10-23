@@ -113,10 +113,15 @@ suite('AttemptSession', () => {
 
 	test('submits mapped evidence and replaces the attempt with backend state', async () => {
 		let request: { attemptId: string; submission: TestSubmission } | undefined;
+		const loadedLevels: string[] = [];
 		const backendClient = createBackendClient();
 		backendClient.submitTestResults = async (attemptId, submission) => {
 			request = { attemptId, submission };
 			return completedLevelResult();
+		};
+		backendClient.getVisibleLevel = async (_attemptId, levelId) => {
+			loadedLevels.push(levelId);
+			return visibleLevel(levelId, 'active');
 		};
 		const session = new AttemptSession(backendClient);
 		session.open(challengeSummary(), openedAttempt());
@@ -136,7 +141,53 @@ suite('AttemptSession', () => {
 		});
 		assert.strictEqual(snapshot.submissionStatus, 'accepted');
 		assert.strictEqual(snapshot.attempt.activeLevelId, 'phrase-search');
+		assert.strictEqual(snapshot.level.id, 'phrase-search');
+		assert.strictEqual(snapshot.selectedSection, ChallengeSection.Build);
+		assert.strictEqual(snapshot.latestTestEvidence, undefined);
+		assert.deepStrictEqual(loadedLevels, ['phrase-search']);
 		assert.strictEqual(snapshot.submissionError, undefined);
+	});
+
+	test('keeps failed submission evidence on the current level', async () => {
+		let levelRequestCount = 0;
+		const backendClient = createBackendClient();
+		backendClient.getVisibleLevel = async () => {
+			levelRequestCount += 1;
+			return visibleLevel('prefix-search', 'active');
+		};
+		const session = new AttemptSession(backendClient);
+		session.open(challengeSummary(), openedAttempt());
+		session.completeTestRun(testEvidence({
+			passed: false,
+			passedCount: 0,
+			failedCount: 1,
+			exitCode: 1,
+		}));
+
+		const snapshot = await session.submitTestResults();
+
+		assert.strictEqual(snapshot.submissionStatus, 'accepted');
+		assert.strictEqual(snapshot.level.id, 'prefix-search');
+		assert.strictEqual(snapshot.testStatus, 'failed');
+		assert.ok(snapshot.latestTestEvidence);
+		assert.strictEqual(levelRequestCount, 0);
+	});
+
+	test('opens final design feedback when the challenge is completed', async () => {
+		const backendClient = createBackendClient();
+		backendClient.submitTestResults = async () => completedAttemptResult();
+		backendClient.getVisibleLevel = async (_attemptId, levelId) =>
+			visibleLevel(levelId, 'completed');
+		const session = new AttemptSession(backendClient);
+		session.open(challengeSummary(), openedAttempt());
+		session.completeTestRun(testEvidence());
+
+		const snapshot = await session.submitTestResults();
+
+		assert.strictEqual(snapshot.attempt.status, 'completed');
+		assert.strictEqual(snapshot.level.status, 'completed');
+		assert.strictEqual(snapshot.level.designFeedback, 'Review the tradeoffs.');
+		assert.strictEqual(snapshot.selectedSection, ChallengeSection.Design);
 	});
 
 	test('exposes submitting state while the backend request is pending', async () => {
@@ -196,6 +247,24 @@ suite('AttemptSession', () => {
 
 		pending.resolve(completedLevelResult());
 		await firstSubmission;
+	});
+
+	test('rejects a new test run while a submission is pending', async () => {
+		const pending = deferred<TestSubmissionResultDto>();
+		const backendClient = createBackendClient();
+		backendClient.submitTestResults = async () => pending.promise;
+		const session = new AttemptSession(backendClient);
+		session.open(challengeSummary(), openedAttempt());
+		session.completeTestRun(testEvidence());
+		const submission = session.submitTestResults();
+
+		assert.throws(
+			() => session.startTestRun(),
+			/A CodeArc submission is already in progress/,
+		);
+
+		pending.resolve(completedLevelResult());
+		await submission;
 	});
 
 	test('loads another level already visible in the attempt', async () => {
@@ -379,6 +448,24 @@ function completedLevelResult(): TestSubmissionResultDto {
 	return {
 		outcome: 'level_completed',
 		attempt: updatedAttempt,
+		completedLevelId: 'prefix-search',
+	};
+}
+
+function completedAttemptResult(): TestSubmissionResultDto {
+	const attempt = openedAttempt().attempt;
+	return {
+		outcome: 'attempt_completed',
+		attempt: {
+			...attempt,
+			status: 'completed',
+			completedAt: '2026-10-17T13:00:00+00:00',
+			levels: attempt.levels.map((level) => ({
+				...level,
+				status: 'completed',
+				completedAt: level.completedAt ?? '2026-10-17T13:00:00+00:00',
+			})),
+		},
 		completedLevelId: 'prefix-search',
 	};
 }

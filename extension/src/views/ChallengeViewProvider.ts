@@ -138,6 +138,9 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 				case ChallengeViewAction.OpenTestCase:
 					await this.openTestCase(message.testPath, message.testName);
 					return;
+				case ChallengeViewAction.SubmitSolution:
+					await this.submitSolution();
+					return;
 			}
 
 			this.render();
@@ -293,6 +296,22 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 				void vscode.window.showErrorMessage(`CodeArc: ${message}`);
 			});
 	}
+
+	private async submitSolution(): Promise<void> {
+		await this.runChecks();
+
+		const pendingSubmission = this.attemptSession.submitTestResults();
+
+		this.attemptSessionSnapshot = this.attemptSession.getSnapshot();
+		this.render();
+
+		try {
+			await pendingSubmission;
+		} finally {
+			this.attemptSessionSnapshot = this.attemptSession.getSnapshot();
+			this.render();
+		}
+	}
 }
 
 type ViewMessage =
@@ -307,7 +326,8 @@ type ViewMessage =
 			| ChallengeViewAction.RetryAttempts
 			| ChallengeViewAction.BackToCatalog
 			| ChallengeViewAction.RunChecks
-			| ChallengeViewAction.OpenWorkspace;
+			| ChallengeViewAction.OpenWorkspace
+			| ChallengeViewAction.SubmitSolution;
 	}
 	| { type: ChallengeViewAction.SelectSection; section: ChallengeSection };
 

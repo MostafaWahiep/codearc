@@ -274,6 +274,8 @@ code {
 .action:disabled { opacity: 0.65; cursor: wait; }
 
 .sticky-actions {
+	display: grid;
+	gap: 6px;
 	position: fixed;
 	right: 0;
 	bottom: 0;
@@ -285,6 +287,23 @@ code {
 }
 
 .sticky-actions .action { margin: 0; }
+
+.submission-notice {
+	margin-bottom: 14px;
+	padding: 9px 10px;
+	border-left: 3px solid var(--vscode-panel-border);
+	background: var(--vscode-textBlockQuote-background);
+}
+
+.submission-notice p { margin: 4px 0 0; }
+
+.submission-notice-accepted {
+	border-left-color: var(--vscode-testing-iconPassed);
+}
+
+.submission-notice-rejected {
+	border-left-color: var(--vscode-testing-iconFailed);
+}
 
 .check-summary {
 	display: flex;

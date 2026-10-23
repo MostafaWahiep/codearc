@@ -3,6 +3,7 @@ import type {
 	AttemptDto,
 	ChallengeSummaryDto,
 	TestSubmission,
+	TestSubmissionResultDto,
 	VisibleLevelDto,
 } from '../backend/BackendTypes';
 import type { OpenedAttempt } from './AttemptCatalog';
@@ -63,6 +64,9 @@ export class AttemptSession {
 
 	public async selectLevel(levelId: string): Promise<AttemptSessionSnapshot> {
 		const current = this.getRequiredSnapshot();
+		if (current.submissionStatus === 'submitting') {
+			throw new Error('Wait for the current submission to finish.');
+		}
 		this.requireVisibleProgress(current.attempt, levelId);
 		const revision = ++this.revision;
 		const level = await this.backendClient.getVisibleLevel(
@@ -89,6 +93,9 @@ export class AttemptSession {
 		const current = this.getRequiredSnapshot();
 		if (current.testStatus === 'running') {
 			throw new Error('A CodeArc test run is already in progress.');
+		}
+		if (current.submissionStatus === 'submitting') {
+			throw new Error('A CodeArc submission is already in progress.');
 		}
 		this.snapshot = {
 			...current,
@@ -140,9 +147,10 @@ export class AttemptSession {
 		const submission = this.createTestSubmission();
 		const current = this.startSubmission();
 		const revision = ++this.revision;
+		let result: TestSubmissionResultDto;
 
 		try {
-			const result = await this.backendClient.submitTestResults(
+			result = await this.backendClient.submitTestResults(
 				current.attempt.id,
 				submission,
 			);
@@ -155,7 +163,6 @@ export class AttemptSession {
 					submissionError: undefined,
 				};
 			}
-			return this.getRequiredSnapshot();
 		} catch (error) {
 			if (revision === this.revision) {
 				const message = error instanceof Error ? error.message : String(error);
@@ -167,6 +174,28 @@ export class AttemptSession {
 			}
 			throw error;
 		}
+
+		if (revision !== this.revision || result.outcome === 'tests_failed') {
+			return this.getRequiredSnapshot();
+		}
+
+		const visibleLevel = await this.backendClient.getVisibleLevel(
+			result.attempt.id,
+			result.attempt.activeLevelId,
+		);
+		if (revision === this.revision) {
+			const accepted = this.getRequiredSnapshot();
+			this.snapshot = {
+				...accepted,
+				level: visibleLevel,
+				selectedSection: result.outcome === 'attempt_completed'
+					? ChallengeSection.Design
+					: ChallengeSection.Build,
+				testStatus: 'idle',
+				latestTestEvidence: undefined,
+			};
+		}
+		return this.getRequiredSnapshot();
 	}
 
 	public createTestSubmission(): TestSubmission {
