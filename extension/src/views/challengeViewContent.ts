@@ -203,7 +203,14 @@ async function renderAttemptSection(
 			const feedback = await markdownRenderer.render(
 				removeLeadingHeading(snapshot.level.designFeedback),
 			);
-			return `<section class="card"><p class="eyebrow">Design reflection</p><div class="markdown-content">${feedback}</div></section>`;
+			const currentStageAction = snapshot.attempt.status !== 'completed'
+				&& snapshot.level.id !== snapshot.attempt.activeLevelId
+				? `<div class="sticky-actions">
+					<button class="action" type="button" data-action="${ChallengeViewAction.CurrentStage}">Continue to current stage</button>
+				</div>`
+				: '';
+			return `<section class="card"><p class="eyebrow">Design reflection</p><div class="markdown-content">${feedback}</div></section>
+				${currentStageAction}`;
 		}
 	}
 }

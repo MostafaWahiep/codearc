@@ -152,6 +152,40 @@ suite('Challenge view rendering', () => {
 		assert.doesNotMatch(html, /Design is locked/);
 	});
 
+	test('offers the backend current stage after design reflection', async () => {
+		const snapshot = createAttemptSessionSnapshot();
+		snapshot.level.status = 'completed';
+		snapshot.level.designFeedback = '# Reflection\n\nConsider an inverted index.';
+		snapshot.selectedSection = ChallengeSection.Design;
+		snapshot.attempt.activeLevelId = 'phrase-search';
+		snapshot.attempt.levels.push({
+			levelId: 'phrase-search',
+			status: 'active',
+			submissionCount: 0,
+			completedAt: null,
+		});
+
+		let html = await renderChallenge(
+			markdownRenderer,
+			createCatalogSnapshot(),
+			undefined,
+			snapshot,
+		);
+
+		assert.match(html, /data-action="currentStage"/);
+		assert.match(html, /Continue to current stage/);
+
+		snapshot.attempt.status = 'completed';
+		html = await renderChallenge(
+			markdownRenderer,
+			createCatalogSnapshot(),
+			undefined,
+			snapshot,
+		);
+
+		assert.doesNotMatch(html, /data-action="currentStage"/);
+	});
+
 	test('renders submission controls and backend submission state', async () => {
 		const snapshot = createAttemptSessionSnapshot();
 		snapshot.selectedSection = ChallengeSection.Results;

@@ -181,21 +181,32 @@ export class AttemptSession {
 
 		const visibleLevel = await this.backendClient.getVisibleLevel(
 			result.attempt.id,
-			result.attempt.activeLevelId,
+			result.completedLevelId ?? current.level.id,
 		);
 		if (revision === this.revision) {
 			const accepted = this.getRequiredSnapshot();
 			this.snapshot = {
 				...accepted,
 				level: visibleLevel,
-				selectedSection: result.outcome === 'attempt_completed'
-					? ChallengeSection.Design
-					: ChallengeSection.Build,
+				selectedSection: ChallengeSection.Design,
 				testStatus: 'idle',
 				latestTestEvidence: undefined,
 			};
 		}
 		return this.getRequiredSnapshot();
+	}
+
+	public async moveToCurrentStage(): Promise<AttemptSessionSnapshot> {
+		const current = this.getRequiredSnapshot();
+		if (current.submissionStatus === 'submitting') {
+			throw new Error('Wait for the current submission to finish.');
+		}
+
+		if (current.level.id === current.attempt.activeLevelId) {
+			return current;
+		}
+
+		return this.selectLevel(current.attempt.activeLevelId);
 	}
 
 	public createTestSubmission(): TestSubmission {

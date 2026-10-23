@@ -141,6 +141,9 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 				case ChallengeViewAction.SubmitSolution:
 					await this.submitSolution();
 					return;
+				case ChallengeViewAction.CurrentStage:
+					await this.moveToCurrentStage();
+					return;
 			}
 
 			this.render();
@@ -209,6 +212,15 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 			this.attemptSessionSnapshot = this.attemptSession.cancelTestRun();
 			throw error;
 		}
+		this.render();
+	}
+
+	private async moveToCurrentStage(): Promise<void> {
+		const current = this.attemptSessionSnapshot;
+		if (!current) {
+			throw new Error('Open an attempt before moving to the current stage.');
+		}
+		this.attemptSessionSnapshot = await this.attemptSession.moveToCurrentStage();
 		this.render();
 	}
 
@@ -327,7 +339,8 @@ type ViewMessage =
 			| ChallengeViewAction.BackToCatalog
 			| ChallengeViewAction.RunChecks
 			| ChallengeViewAction.OpenWorkspace
-			| ChallengeViewAction.SubmitSolution;
+			| ChallengeViewAction.SubmitSolution
+			| ChallengeViewAction.CurrentStage;
 	}
 	| { type: ChallengeViewAction.SelectSection; section: ChallengeSection };
 

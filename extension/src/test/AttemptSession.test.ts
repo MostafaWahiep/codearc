@@ -121,7 +121,10 @@ suite('AttemptSession', () => {
 		};
 		backendClient.getVisibleLevel = async (_attemptId, levelId) => {
 			loadedLevels.push(levelId);
-			return visibleLevel(levelId, 'active');
+			return visibleLevel(
+				levelId,
+				levelId === 'prefix-search' ? 'completed' : 'active',
+			);
 		};
 		const session = new AttemptSession(backendClient);
 		session.open(challengeSummary(), openedAttempt());
@@ -141,11 +144,17 @@ suite('AttemptSession', () => {
 		});
 		assert.strictEqual(snapshot.submissionStatus, 'accepted');
 		assert.strictEqual(snapshot.attempt.activeLevelId, 'phrase-search');
-		assert.strictEqual(snapshot.level.id, 'phrase-search');
-		assert.strictEqual(snapshot.selectedSection, ChallengeSection.Build);
+		assert.strictEqual(snapshot.level.id, 'prefix-search');
+		assert.strictEqual(snapshot.selectedSection, ChallengeSection.Design);
 		assert.strictEqual(snapshot.latestTestEvidence, undefined);
-		assert.deepStrictEqual(loadedLevels, ['phrase-search']);
+		assert.deepStrictEqual(loadedLevels, ['prefix-search']);
 		assert.strictEqual(snapshot.submissionError, undefined);
+
+		const currentStage = await session.moveToCurrentStage();
+
+		assert.strictEqual(currentStage.level.id, 'phrase-search');
+		assert.strictEqual(currentStage.selectedSection, ChallengeSection.Build);
+		assert.deepStrictEqual(loadedLevels, ['prefix-search', 'phrase-search']);
 	});
 
 	test('keeps failed submission evidence on the current level', async () => {

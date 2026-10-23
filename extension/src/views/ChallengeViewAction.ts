@@ -11,4 +11,5 @@ export enum ChallengeViewAction {
 	OpenWorkspace = 'openWorkspace',
 	OpenTestCase = 'openTestCase',
 	SubmitSolution = 'submitSolution',
+	CurrentStage = 'currentStage',
 }
