@@ -6,6 +6,7 @@ import type {
 	PublicTestBundleDto,
 	TestSubmission,
 	TestSubmissionResultDto,
+	StarterFilesDto,
 } from './BackendTypes';
 
 export interface BackendClient {
@@ -34,4 +35,9 @@ export interface BackendClient {
 		attemptId: string,
 		testSubmission: TestSubmission,
 	): Promise<TestSubmissionResultDto>;
+
+	getStarterFiles(
+		challengeId: string,
+		version: string,
+	): Promise<StarterFilesDto>;
 }

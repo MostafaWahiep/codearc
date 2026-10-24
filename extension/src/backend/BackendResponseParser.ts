@@ -13,6 +13,7 @@ import type {
 	PublicTestCategory,
 	TestSubmissionResultDto,
 	TestSubmissionOutcome,
+	StarterFilesDto,
 } from './BackendTypes';
 
 const attemptStatuses: AttemptStatus[] = ['in_progress', 'completed'];
@@ -182,6 +183,29 @@ export function parseTestResult(
 				result.completedLevelId,
 				'response.completedLevelId',
 			),
+		};
+	});
+}
+
+export function parseStarterFiles(
+	value: unknown,
+	method: string,
+	path: string,
+): StarterFilesDto {
+	return parseResponse(method, path, () => {
+		const starterFiles = expectObject(value, 'response');
+		return {
+			challengeId: expectString(starterFiles.challengeId, 'response.challengeId'),
+			version: expectString(starterFiles.version, 'response.version'),
+			entrypoint: expectString(starterFiles.entrypoint, 'response.entrypoint'),
+			files: expectArray(starterFiles.files, 'response.files').map((file, index) => {
+				const location = `response.files[${index}]`;
+				const starterFile = expectObject(file, location);
+				return {
+					filePath: expectString(starterFile.filePath, `${location}.filePath`),
+					content: expectString(starterFile.content, `${location}.content`),
+				};
+			}),
 		};
 	});
 }

@@ -171,7 +171,10 @@ function createBackendClient(bundle: PublicTestBundleDto): BackendClient {
 		getVisibleTests: async () => bundle,
 		submitTestResults: async () => {
 			throw new Error('Not used');
-		}
+		},
+		getStarterFiles: async () => {
+			throw new Error('Not implemented by this test fake.');
+		},
 	};
 }
 

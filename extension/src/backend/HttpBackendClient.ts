@@ -11,6 +11,7 @@ import {
 	parseVisibleLevel,
 	parsePublicTestBundle,
 	parseTestResult,
+	parseStarterFiles,
 } from './BackendResponseParser';
 import type {
 	AttemptDto,
@@ -20,6 +21,7 @@ import type {
 	PublicTestBundleDto,
 	TestSubmission,
 	TestSubmissionResultDto,
+	StarterFilesDto,
 } from './BackendTypes';
 
 export type BackendFetch = (
@@ -103,6 +105,30 @@ export class HttpBackendClient implements BackendClient {
 		const path = `/attempts/${encodeURIComponent(attemptId)}/submissions`;
 		const response = await this.request(method, path, {...testSubmission});
 		return parseTestResult(response, method, path);
+	}
+
+	public async getStarterFiles(
+		challengeId: string,
+		version: string,
+	): Promise<StarterFilesDto> {
+		const method = 'GET';
+		const queryParams = new URLSearchParams({ version }).toString();
+		const path = `/challenges/${encodeURIComponent(challengeId)}/starter-files?${queryParams}`;
+		const response = await this.request(method, path);
+		const starterFiles = parseStarterFiles(response, method, path);
+
+		if (
+			starterFiles.challengeId !== challengeId
+			|| starterFiles.version !== version
+		) {
+			throw new InvalidBackendResponseError(
+				method,
+				path,
+				'the starter files do not match the requested challenge release',
+			);
+		}
+
+		return starterFiles;
 	}
 
 	private async request(

@@ -62,6 +62,9 @@ function createBackendClient(): BackendClient {
 		getVisibleTests: async () => ({ runner: 'pytest', files: [] }),
 		submitTestResults: async () => {
 			throw new Error('Not implemented by this test fake.');
+		},
+		getStarterFiles: async () => {
+			throw new Error('Not implemented by this test fake.');
 		}
 	};
 }

@@ -152,6 +152,44 @@ suite('HttpBackendClient', () => {
 		);
 	});
 
+	test('loads starter files for an exact challenge release', async () => {
+		const calls: Array<{ url: string; init?: RequestInit }> = [];
+		const client = createClient(async (url, init) => {
+			calls.push({ url, init });
+			return jsonResponse(starterFilesResponse());
+		});
+
+		const starterFiles = await client.getStarterFiles(
+			'search engine',
+			'1 beta',
+		);
+
+		assert.deepStrictEqual(
+			starterFiles,
+			starterFilesResponse('search engine', '1 beta'),
+		);
+		assert.strictEqual(
+			calls[0].url,
+			`${backendUrl}/challenges/search%20engine/starter-files?version=1+beta`,
+		);
+		assert.strictEqual(calls[0].init?.method, 'GET');
+	});
+
+	test('rejects starter files for a different challenge release', async () => {
+		const client = createClient(async () => jsonResponse(
+			starterFilesResponse('search-engine', '2'),
+		));
+
+		await assert.rejects(
+			client.getStarterFiles('search-engine', '1'),
+			(error: unknown) => {
+				assert.ok(error instanceof InvalidBackendResponseError);
+				assert.match(error.message, /requested challenge release/);
+				return true;
+			},
+		);
+	});
+
 	test('submits local test results and returns backend-approved progression', async () => {
 		const calls: Array<{ url: string; init?: RequestInit }> = [];
 		const updatedAttempt = attemptResponse();
@@ -314,6 +352,27 @@ function attemptResponse(): Record<string, unknown> {
 				status: 'active',
 				submissionCount: 0,
 				completedAt: null,
+			},
+		],
+	};
+}
+
+function starterFilesResponse(
+	challengeId = 'search engine',
+	version = '1 beta',
+): Record<string, unknown> {
+	return {
+		challengeId,
+		version,
+		entrypoint: 'search_engine.py',
+		files: [
+			{
+				filePath: 'helpers/tokenize.py',
+				content: 'def tokenize(text):\n    return text.split()\n',
+			},
+			{
+				filePath: 'search_engine.py',
+				content: 'class SearchEngine:\n    pass\n',
 			},
 		],
 	};

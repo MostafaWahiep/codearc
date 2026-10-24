@@ -95,6 +95,9 @@ function createBackendClient(): BackendClient {
 			attempt: fullAttempt(),
 			completedLevelId: null,
 		}),
+		getStarterFiles: async () => {
+			throw new Error('Not implemented by this test fake.');
+		},
 	};
 }
 

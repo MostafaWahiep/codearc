@@ -86,3 +86,15 @@ export interface TestSubmissionResultDto {
 	attempt: AttemptDto;
 	completedLevelId: string | null;
 }
+
+export interface StarterFileDto {
+	filePath: string;
+	content: string;
+}
+
+export interface StarterFilesDto {
+	challengeId: string;
+	version: string;
+	entrypoint: string;
+	files: StarterFileDto[];
+}
