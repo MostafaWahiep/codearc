@@ -35,6 +35,7 @@ suite('PytestRunner', () => {
 		const evidence = await runner.run({
 			attemptId: 'attempt-1',
 			workspacePath,
+			environmentPath: workspacePath,
 		});
 
 		assert.strictEqual(evidence.passed, false);
@@ -87,19 +88,66 @@ suite('PytestRunner', () => {
 			createBackendClient(testBundle()),
 			createPassingExecutor(),
 		);
-		const first = await runner.run({ attemptId: 'attempt-1', workspacePath });
+		const first = await runner.run({
+			attemptId: 'attempt-1',
+			workspacePath,
+			environmentPath: workspacePath,
+		});
 		await fs.mkdir(path.join(workspacePath, '.venv'), { recursive: true });
 		await fs.writeFile(path.join(workspacePath, '.venv', 'dependency.py'), 'ignored\n');
 		const withEnvironment = await runner.run({
 			attemptId: 'attempt-1',
 			workspacePath,
+			environmentPath: workspacePath,
 		});
 		await fs.appendFile(path.join(workspacePath, 'search_engine.py'), '# changed\n');
 
-		const second = await runner.run({ attemptId: 'attempt-1', workspacePath });
+		const second = await runner.run({
+			attemptId: 'attempt-1',
+			workspacePath,
+			environmentPath: workspacePath,
+		});
 
 		assert.strictEqual(first.codeHash, withEnvironment.codeHash);
 		assert.notStrictEqual(first.codeHash, second.codeHash);
+	});
+
+	test('uses the attempt-root virtual environment while running in the challenge root', async () => {
+		const attemptRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'codearc-attempt-'));
+		try {
+			const challengeRoot = path.join(attemptRoot, 'search-engine');
+			await fs.mkdir(challengeRoot);
+			await fs.writeFile(
+				path.join(challengeRoot, 'search_engine.py'),
+				'class SearchEngine:\n    pass\n',
+			);
+			const expectedPython = process.platform === 'win32'
+				? path.join(attemptRoot, '.venv', 'Scripts', 'python.exe')
+				: path.join(attemptRoot, '.venv', 'bin', 'python');
+			const calls: Array<{ command: string; cwd: string }> = [];
+			const execute: CommandExecutor = async (command, args, options) => {
+				calls.push({ command, cwd: options.cwd });
+				if (args.includes('--version')) {
+					return commandResult(0, args.includes('pytest')
+						? 'pytest 9.0.0\n'
+						: 'Python 3.14.0\n');
+				}
+				return commandResult(0, testOutput('PASSED', 'PASSED'));
+			};
+			const runner = new PytestRunner(createBackendClient(testBundle()), execute);
+
+			await runner.run({
+				attemptId: 'attempt-1',
+				workspacePath: challengeRoot,
+				environmentPath: attemptRoot,
+			});
+
+			assert.ok(calls.length >= 3);
+			assert.ok(calls.every((call) => call.command === expectedPython));
+			assert.ok(calls.every((call) => call.cwd === challengeRoot));
+		} finally {
+			await fs.rm(attemptRoot, { recursive: true, force: true });
+		}
 	});
 
 	test('reports an actionable error when Python is missing', async () => {
@@ -109,7 +157,11 @@ suite('PytestRunner', () => {
 		const runner = new PytestRunner(createBackendClient(testBundle()), execute);
 
 		await assert.rejects(
-			runner.run({ attemptId: 'attempt-1', workspacePath }),
+			runner.run({
+				attemptId: 'attempt-1',
+				workspacePath,
+				environmentPath: workspacePath,
+			}),
 			/Python was not found/,
 		);
 	});
@@ -129,11 +181,19 @@ suite('PytestRunner', () => {
 			return commandResult(0, 'Python 3.14.0\n');
 		};
 		const runner = new PytestRunner(createBackendClient(testBundle()), execute);
-		const firstRun = runner.run({ attemptId: 'attempt-1', workspacePath });
+		const firstRun = runner.run({
+			attemptId: 'attempt-1',
+			workspacePath,
+			environmentPath: workspacePath,
+		});
 		await runStarted;
 
 		await assert.rejects(
-			runner.run({ attemptId: 'attempt-1', workspacePath }),
+			runner.run({
+				attemptId: 'attempt-1',
+				workspacePath,
+				environmentPath: workspacePath,
+			}),
 			/already in progress/,
 		);
 		releaseRun?.(commandResult(0, testOutput('PASSED', 'PASSED')));
@@ -152,7 +212,11 @@ suite('PytestRunner', () => {
 		};
 		const runner = new PytestRunner(createBackendClient(testBundle()), execute);
 
-		const evidence = await runner.run({ attemptId: 'attempt-1', workspacePath });
+		const evidence = await runner.run({
+			attemptId: 'attempt-1',
+			workspacePath,
+			environmentPath: workspacePath,
+		});
 
 		assert.strictEqual(evidence.passed, false);
 		assert.strictEqual(evidence.timedOut, true);

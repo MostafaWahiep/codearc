@@ -44,7 +44,10 @@ export class PytestRunner implements LocalTestRunner {
 			await ensureDirectory(request.workspacePath);
 			const bundle = await this.backendClient.getVisibleTests(request.attemptId);
 			const testsPath = await materializeTests(request.workspacePath, bundle);
-			const python = await this.findPython(request.workspacePath);
+			const python = await this.findPython(
+				request.environmentPath,
+				request.workspacePath,
+			);
 			const versionResult = await this.execute(
 				python,
 				['-m', 'pytest', '--version'],
@@ -87,15 +90,15 @@ export class PytestRunner implements LocalTestRunner {
 		}
 	}
 
-	private async findPython(cwd: string): Promise<string> {
+	private async findPython(environmentPath: string, cwd: string): Promise<string> {
 		const workspaceInterpreters = process.platform === 'win32'
 			? [
-				path.join(cwd, '.venv', 'Scripts', 'python.exe'),
-				path.join(cwd, 'venv', 'Scripts', 'python.exe'),
+				path.join(environmentPath, '.venv', 'Scripts', 'python.exe'),
+				path.join(environmentPath, 'venv', 'Scripts', 'python.exe'),
 			]
 			: [
-				path.join(cwd, '.venv', 'bin', 'python'),
-				path.join(cwd, 'venv', 'bin', 'python'),
+				path.join(environmentPath, '.venv', 'bin', 'python'),
+				path.join(environmentPath, 'venv', 'bin', 'python'),
 			];
 		for (const command of [...workspaceInterpreters, 'python3', 'python']) {
 			try {

@@ -10,6 +10,7 @@
     "Other"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onView:codearc.challengeView",
     "onCommand:codearc.startChallenge"
   ],

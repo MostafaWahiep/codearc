@@ -1,6 +1,7 @@
 export interface LocalTestRunRequest {
 	attemptId: string;
 	workspacePath: string;
+	environmentPath: string;
 }
 
 export interface NormalizedTestCase {

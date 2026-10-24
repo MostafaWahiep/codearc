@@ -80,6 +80,10 @@ export class AttemptCatalog {
 			throw new Error('Choose one of the listed attempts to continue.');
 		}
 
+		return this.restore(attemptId);
+	}
+
+	public async restore(attemptId: string): Promise<OpenedAttempt> {
 		const attempt = await this.backendClient.getAttempt(attemptId);
 		return this.openAttempt(attempt);
 	}

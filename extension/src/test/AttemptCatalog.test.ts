@@ -78,6 +78,33 @@ suite('AttemptCatalog', () => {
 			/Choose one of the listed attempts/,
 		);
 	});
+
+	test('restores an attempt without loading the attempt list first', async () => {
+		const backendClient = createBackendClient();
+		const attemptRequests: string[] = [];
+		const levelRequests: Array<{ attemptId: string; levelId: string }> = [];
+		backendClient.getAttempt = async (attemptId) => {
+			attemptRequests.push(attemptId);
+			return fullAttempt();
+		};
+		backendClient.getVisibleLevel = async (attemptId, levelId) => {
+			levelRequests.push({ attemptId, levelId });
+			return visibleLevel();
+		};
+		const catalog = new AttemptCatalog(backendClient, userId);
+
+		const opened = await catalog.restore(fullAttempt().id);
+
+		assert.deepStrictEqual(attemptRequests, [fullAttempt().id]);
+		assert.deepStrictEqual(levelRequests, [
+			{
+				attemptId: fullAttempt().id,
+				levelId: fullAttempt().activeLevelId,
+			},
+		]);
+		assert.strictEqual(opened.attempt.id, fullAttempt().id);
+		assert.strictEqual(opened.level.id, visibleLevel().id);
+	});
 });
 
 function createBackendClient(): BackendClient {

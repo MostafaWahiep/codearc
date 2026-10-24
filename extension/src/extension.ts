@@ -45,6 +45,13 @@ export function activate(context: vscode.ExtensionContext) {
 		),
 		registerStartChallengeCommand(viewProvider),
 	);
+
+	void viewProvider.restoreOpenedWorkspace().catch((error: unknown) => {
+		const message = error instanceof Error ? error.message : String(error);
+		void vscode.window.showErrorMessage(
+			`CodeArc could not restore the opened attempt: ${message}`,
+		);
+	});
 }
 
 export function deactivate() {}

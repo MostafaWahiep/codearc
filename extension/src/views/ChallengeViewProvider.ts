@@ -90,6 +90,30 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		}
 	}
 
+	public async restoreOpenedWorkspace(): Promise<void> {
+		const workspace = await this.learnerWorkspace.findOpenedAttemptWorkspace();
+		if (!workspace) {
+			return;
+		}
+
+		await this.loadChallengeCatalog();
+		if (this.catalogSnapshot.status !== ChallengeCatalogStatus.Ready) {
+			throw new Error(
+				this.catalogSnapshot.errorMessage
+					?? 'The challenge catalog could not be loaded.',
+			);
+		}
+
+		const openedAttempt = await this.attemptCatalog.restore(workspace.attemptId);
+		if (openedAttempt.attempt.challengeId !== workspace.challengeId) {
+			throw new Error('The opened learner folder does not match its backend attempt.');
+		}
+
+		await this.learnerWorkspace.ensureWorkspace(openedAttempt.attempt);
+		this.openAttemptSession(openedAttempt);
+		this.render();
+	}
+
 	private async handleMessage(message: unknown): Promise<void> {
 		if (!isViewMessage(message)) {
 			return;
@@ -206,6 +230,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 			const evidence = await this.localTestRunner.run({
 				attemptId: current.attempt.id,
 				workspacePath: workspace.challengeRootUri.fsPath,
+				environmentPath: workspace.attemptRootUri.fsPath,
 			});
 			this.attemptSessionSnapshot = this.attemptSession.completeTestRun(evidence);
 		} catch (error) {
