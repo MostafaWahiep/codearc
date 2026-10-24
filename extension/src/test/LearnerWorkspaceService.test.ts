@@ -152,6 +152,76 @@ suite('LearnerWorkspaceService', () => {
 		);
 	});
 
+	test('finds the attempt represented by the opened challenge folder', async () => {
+		const firstService = new LearnerWorkspaceService(
+			vscode.Uri.file(storagePath),
+			createBackendClient(async () => starterFiles()),
+		);
+		await firstService.createWorkspace(attempt());
+		const challengeRoot = path.join(
+			expectedAttemptRoot(storagePath),
+			'search-engine',
+		);
+		const discoveryService = new LearnerWorkspaceService(
+			vscode.Uri.file(storagePath),
+			createBackendClient(async () => {
+				throw new Error('Discovery must not fetch starter files.');
+			}),
+			() => [workspaceFolder(challengeRoot)],
+		);
+
+		const workspace = await discoveryService.findOpenedAttemptWorkspace();
+
+		assert.strictEqual(workspace?.attemptId, attemptId);
+		assert.strictEqual(workspace?.challengeId, 'search-engine');
+		assert.strictEqual(workspace?.attemptRootUri.fsPath, expectedAttemptRoot(storagePath));
+		assert.strictEqual(workspace?.challengeRootUri.fsPath, challengeRoot);
+		assert.strictEqual(
+			workspace?.entrypointUri.fsPath,
+			path.join(challengeRoot, 'search_engine.py'),
+		);
+	});
+
+	test('ignores an opened folder outside the learner workspace root', async () => {
+		const unrelatedFolder = path.join(storagePath, 'another-project');
+		await fs.mkdir(unrelatedFolder);
+		const service = new LearnerWorkspaceService(
+			vscode.Uri.file(storagePath),
+			createBackendClient(async () => starterFiles()),
+			() => [workspaceFolder(unrelatedFolder)],
+		);
+
+		assert.strictEqual(await service.findOpenedAttemptWorkspace(), undefined);
+	});
+
+	test('rejects an opened learner folder that disagrees with its metadata', async () => {
+		const attemptRoot = expectedAttemptRoot(storagePath);
+		const challengeRoot = path.join(attemptRoot, 'search-engine');
+		await fs.mkdir(challengeRoot, { recursive: true });
+		await fs.writeFile(path.join(challengeRoot, 'search_engine.py'), 'pass\n');
+		await fs.writeFile(
+			path.join(attemptRoot, 'attempt.json'),
+			JSON.stringify({
+				schemaVersion: 1,
+				attemptId: 'different-attempt',
+				challengeId: 'search-engine',
+				challengeVersion: '1',
+				entrypoint: 'search_engine.py',
+			}),
+			'utf8',
+		);
+		const service = new LearnerWorkspaceService(
+			vscode.Uri.file(storagePath),
+			createBackendClient(async () => starterFiles()),
+			() => [workspaceFolder(challengeRoot)],
+		);
+
+		await assert.rejects(
+			service.findOpenedAttemptWorkspace(),
+			/does not match its attempt metadata/,
+		);
+	});
+
 	test('rejects metadata for a different challenge version', async () => {
 		const firstService = new LearnerWorkspaceService(
 			vscode.Uri.file(storagePath),
@@ -250,6 +320,14 @@ function createBackendClient(
 
 function expectedAttemptRoot(storagePath: string): string {
 	return path.join(storagePath, 'learner-workspaces', attemptId);
+}
+
+function workspaceFolder(folderPath: string): vscode.WorkspaceFolder {
+	return {
+		uri: vscode.Uri.file(folderPath),
+		name: path.basename(folderPath),
+		index: 0,
+	};
 }
 
 async function exists(filePath: string): Promise<boolean> {

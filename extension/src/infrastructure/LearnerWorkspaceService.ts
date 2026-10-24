@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { AttemptDto } from '../backend/BackendTypes';
 import { BackendClient } from '../backend/BackendClient';
 
-interface WorkspaceEntry {
+export interface WorkspaceEntry {
 	attemptId: string;
 	attemptRootUri: vscode.Uri;
 	challengeRootUri: vscode.Uri;
@@ -18,7 +18,71 @@ export class LearnerWorkspaceService {
 	public constructor(
 		private readonly storageRoot: vscode.Uri,
 		private readonly backendClient: BackendClient,
+		private readonly getWorkspaceFolders: () => readonly vscode.WorkspaceFolder[] | undefined = (
+			() => vscode.workspace.workspaceFolders
+		),
 	) {}
+
+	public async findOpenedAttemptWorkspace(): Promise<WorkspaceEntry | undefined> {
+		const workspaceFolders = this.getWorkspaceFolders();
+		if (workspaceFolders?.length !== 1) {
+			return undefined;
+		}
+
+		const challengeRoot = workspaceFolders[0].uri;
+		const workspacesRoot = this.getWorkspacesRoot();
+		if (
+			challengeRoot.scheme !== workspacesRoot.scheme
+			|| challengeRoot.authority !== workspacesRoot.authority
+		) {
+			return undefined;
+		}
+
+		const relativePath = path.relative(
+			workspacesRoot.fsPath,
+			challengeRoot.fsPath,
+		);
+		if (
+			!relativePath
+			|| path.isAbsolute(relativePath)
+			|| relativePath === '..'
+			|| relativePath.startsWith(`..${path.sep}`)
+		) {
+			return undefined;
+		}
+
+		const pathParts = relativePath.split(path.sep);
+		if (pathParts.length !== 2) {
+			return undefined;
+		}
+
+		const [attemptId, challengeId] = pathParts;
+		const attemptRoot = vscode.Uri.joinPath(workspacesRoot, attemptId);
+		const metadata = await this.readAttemptMetadata(attemptRoot);
+		if (
+			metadata.attemptId !== attemptId
+			|| metadata.challengeId !== challengeId
+		) {
+			throw new Error('The opened learner folder does not match its attempt metadata.');
+		}
+
+		const relativeEntrypoint = normalizeRelativePath(
+			metadata.entrypoint,
+			'attempt entrypoint',
+		);
+		const entrypoint = vscode.Uri.joinPath(challengeRoot, relativeEntrypoint);
+		if (!(await uriExists(entrypoint))) {
+			throw new Error(`Entrypoint not found for attempt ${attemptId}.`);
+		}
+
+		return {
+			attemptId,
+			attemptRootUri: attemptRoot,
+			challengeRootUri: challengeRoot,
+			entrypointUri: entrypoint,
+			challengeId,
+		};
+	}
 
 	public async ensureWorkspace(attempt: AttemptDto): Promise<WorkspaceEntry> {
 		if (this.workspace?.attemptId === attempt.id) {
@@ -39,17 +103,7 @@ export class LearnerWorkspaceService {
 			return this.workspace;
 		}
 
-		const attemptMetadataPath = vscode.Uri.joinPath(
-			attemptRoot,
-			this.attemptMetadataFileName,
-		);
-
-		if (!await uriExists(attemptMetadataPath)) {
-			throw new Error(`Attempt metadata not found for an existing attempt directory ${attempt.id}`);
-		}
-
-		const fileBytes = await vscode.workspace.fs.readFile(attemptMetadataPath);
-		const attemptMetadata = JSON.parse(Buffer.from(fileBytes).toString('utf8'));
+		const attemptMetadata = await this.readAttemptMetadata(attemptRoot);
 
 		if (
 			attemptMetadata.attemptId !== attempt.id
@@ -221,9 +275,58 @@ export class LearnerWorkspaceService {
 		await vscode.workspace.fs.writeFile(filePath, content);
 	}
 
+	private async readAttemptMetadata(
+		attemptRoot: vscode.Uri,
+	): Promise<AttemptWorkspaceMetadata> {
+		const filePath = vscode.Uri.joinPath(
+			attemptRoot,
+			this.attemptMetadataFileName,
+		);
+		if (!(await uriExists(filePath))) {
+			throw new Error(
+				`Attempt metadata not found in ${attemptRoot.fsPath}.`,
+			);
+		}
+
+		let value: unknown;
+		try {
+			const fileBytes = await vscode.workspace.fs.readFile(filePath);
+			value = JSON.parse(Buffer.from(fileBytes).toString('utf8'));
+		} catch (error) {
+			throw new Error(`Could not read attempt metadata in ${attemptRoot.fsPath}.`, {
+				cause: error,
+			});
+		}
+
+		if (!isAttemptWorkspaceMetadata(value)) {
+			throw new Error(`Invalid attempt metadata in ${attemptRoot.fsPath}.`);
+		}
+		return value;
+	}
+
 	private getWorkspacesRoot(): vscode.Uri {
 		return vscode.Uri.joinPath(this.storageRoot, 'learner-workspaces');
 	}
+}
+
+interface AttemptWorkspaceMetadata {
+	schemaVersion: 1;
+	attemptId: string;
+	challengeId: string;
+	challengeVersion: string;
+	entrypoint: string;
+}
+
+function isAttemptWorkspaceMetadata(value: unknown): value is AttemptWorkspaceMetadata {
+	if (typeof value !== 'object' || value === null) {
+		return false;
+	}
+	const metadata = value as Record<string, unknown>;
+	return metadata.schemaVersion === 1
+		&& typeof metadata.attemptId === 'string'
+		&& typeof metadata.challengeId === 'string'
+		&& typeof metadata.challengeVersion === 'string'
+		&& typeof metadata.entrypoint === 'string';
 }
 
 function normalizeRelativePath(value: unknown, label: string): string {
