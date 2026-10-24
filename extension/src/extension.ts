@@ -1,4 +1,3 @@
-import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { AttemptCatalog } from './application/AttemptCatalog';
 import { AttemptSession } from './application/AttemptSession';
@@ -19,22 +18,9 @@ export function activate(context: vscode.ExtensionContext) {
 	const challengeCatalog = new ChallengeCatalog(backendClient);
 	const attemptCatalog = new AttemptCatalog(backendClient, prototypeUserId);
 	const attemptSession = new AttemptSession(backendClient);
-	const challengeRoot = path.resolve(
-		context.extensionPath,
-		'..',
-		'challenges',
-		'search-engine',
-		'v1',
-	);
 	const learnerWorkspace = new LearnerWorkspaceService(
 		context.globalStorageUri,
-		[
-			{
-				challengeId: 'search-engine',
-				starterPath: path.join(challengeRoot, 'starter'),
-				entrypointPath: path.join(challengeRoot, 'starter', 'search_engine.py'),
-			},
-		],
+		backendClient,
 	);
 	const localTestRunner = new PytestRunner(backendClient);
 	const markdownRenderer = new VsCodeMarkdownRenderer();

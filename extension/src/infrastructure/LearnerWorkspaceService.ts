@@ -1,87 +1,170 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { AttemptDto } from '../backend/BackendTypes';
+import { BackendClient } from '../backend/BackendClient';
+
+interface WorkspaceEntry {
+	attemptId: string;
+	attemptRootUri: vscode.Uri;
+	challengeRootUri: vscode.Uri;
+	entrypointUri: vscode.Uri;
+	challengeId: string;
+}
 
 export class LearnerWorkspaceService {
-	private readonly templates = new Map<string, ChallengeWorkspaceTemplate>();
+	private workspace: WorkspaceEntry | undefined;
+	private readonly attemptMetadataFileName = 'attempt.json';
 
 	public constructor(
 		private readonly storageRoot: vscode.Uri,
-		templates: ChallengeWorkspaceTemplate[] = [],
-	) {
-		for (const template of templates) {
-			this.templates.set(template.challengeId, template);
-		}
-	}
+		private readonly backendClient: BackendClient,
+	) {}
 
-	public async ensureWorkspace(challengeId: string): Promise<vscode.Uri> {
-		const definition = this.getTemplate(challengeId);
-		const relativeEntrypoint = path.relative(
-			definition.starterPath,
-			definition.entrypointPath,
+	public async ensureWorkspace(attempt: AttemptDto): Promise<WorkspaceEntry> {
+		if (this.workspace?.attemptId === attempt.id) {
+			return this.workspace;
+		}
+
+		const workspacesRoot = this.getWorkspacesRoot();
+		const attemptRoot = vscode.Uri.joinPath(workspacesRoot, attempt.id);
+		const challengeRoot = vscode.Uri.joinPath(attemptRoot, attempt.challengeId);
+
+		if (!(await uriExists(challengeRoot))) {
+			await this.createWorkspace(attempt);
+
+			if (!this.workspace) {
+				throw new Error(`Workspace creation failed for attempt ${attempt.id}.`);
+			}
+
+			return this.workspace;
+		}
+
+		const attemptMetadataPath = vscode.Uri.joinPath(
+			attemptRoot,
+			this.attemptMetadataFileName,
 		);
+
+		if (!await uriExists(attemptMetadataPath)) {
+			throw new Error(`Attempt metadata not found for an existing attempt directory ${attempt.id}`);
+		}
+
+		const fileBytes = await vscode.workspace.fs.readFile(attemptMetadataPath);
+		const attemptMetadata = JSON.parse(Buffer.from(fileBytes).toString('utf8'));
 
 		if (
-			path.isAbsolute(relativeEntrypoint) ||
-			relativeEntrypoint.startsWith(`..${path.sep}`) ||
-			relativeEntrypoint === '..'
+			attemptMetadata.attemptId !== attempt.id
+			|| attemptMetadata.challengeId !== attempt.challengeId
+			|| attemptMetadata.challengeVersion !== attempt.version
 		) {
-			throw new Error('The challenge entrypoint must be inside its starter directory.');
+			throw new Error(`Attempt metadata mismatch for attempt ${attempt.id}`);
 		}
 
-		const workspacesRoot = vscode.Uri.joinPath(this.storageRoot, 'learner-workspaces');
-		const learnerRoot = vscode.Uri.joinPath(workspacesRoot, challengeId);
-		const starterFile = vscode.Uri.joinPath(
-			learnerRoot,
-			...relativeEntrypoint.split(path.sep)
+		const relativeEntrypoint = normalizeRelativePath(
+			attemptMetadata.entrypoint,
+			'attempt entrypoint',
 		);
+		const entrypoint = vscode.Uri.joinPath(challengeRoot, relativeEntrypoint);
 
-		await vscode.workspace.fs.createDirectory(workspacesRoot);
-		if (!(await uriExists(learnerRoot))) {
-			await vscode.workspace.fs.copy(
-				vscode.Uri.file(definition.starterPath),
-				learnerRoot,
-				{ overwrite: false },
-			);
+		if (!(await uriExists(entrypoint))) {
+			throw new Error(`Entrypoint not found for attempt ${attempt.id}.`);
 		}
 
-		if (!(await uriExists(starterFile))) {
-			throw new Error('The challenge starter entrypoint could not be found.');
-		}
+		this.workspace = {
+			attemptId: attempt.id,
+			attemptRootUri: attemptRoot,
+			challengeRootUri: challengeRoot,
+			entrypointUri: entrypoint,
+			challengeId: attempt.challengeId,
+		};
 
-		return learnerRoot;
+		return this.workspace;
 	}
 
-	public async openWorkspace(challengeId: string): Promise<void> {
-		const learnerRoot = await this.ensureWorkspace(challengeId);
-		const definition = this.getTemplate(challengeId);
-		const relativeEntrypoint = path.relative(
-			definition.starterPath,
-			definition.entrypointPath,
-		);
-		const starterFile = vscode.Uri.joinPath(
-			learnerRoot,
-			...relativeEntrypoint.split(path.sep),
-		);
+	public async openWorkspace(attempt: AttemptDto): Promise<void> {
+		const workspace = await this.ensureWorkspace(attempt);
 
 		const isAlreadyOpen = vscode.workspace.workspaceFolders?.some(
-			(folder) => folder.uri.toString() === learnerRoot.toString(),
+			(folder) => folder.uri.toString() === workspace.challengeRootUri.toString(),
 		) ?? false;
 
 		if (!isAlreadyOpen) {
 			await vscode.commands.executeCommand(
 				'vscode.openFolder',
-				learnerRoot,
+				workspace.challengeRootUri,
 				{ forceReuseWindow: true },
 			);
 			return;
 		}
 
-		const document = await vscode.workspace.openTextDocument(starterFile);
+		const document = await vscode.workspace.openTextDocument(workspace.entrypointUri);
 		await vscode.window.showTextDocument(document, { preview: false });
 	}
 
+	public async createWorkspace(
+		attempt: AttemptDto,
+	): Promise<void> {
+		const workspacesRoot = this.getWorkspacesRoot();
+		const attemptRoot = vscode.Uri.joinPath(workspacesRoot, attempt.id);
+		const challengeRoot = vscode.Uri.joinPath(attemptRoot, attempt.challengeId);
+
+		if ((await uriExists(attemptRoot))) {
+			throw new Error(`Workspace for attempt ${attempt.id} already exists.`);
+		}
+
+		const starterFiles = await this.backendClient.getStarterFiles(
+			attempt.challengeId,
+			attempt.version,
+		);
+
+		try {
+			await vscode.workspace.fs.createDirectory(attemptRoot);
+			await vscode.workspace.fs.createDirectory(challengeRoot);
+
+			for (const starterFile of starterFiles.files) {
+				const relativePath = normalizeRelativePath(
+					starterFile.filePath,
+					'starter file',
+				);
+				const targetPath = vscode.Uri.joinPath(challengeRoot, relativePath);
+				const dirPath = vscode.Uri.joinPath(targetPath, '..');
+
+				const binaryData = Buffer.from(starterFile.content, 'utf-8');
+				await vscode.workspace.fs.createDirectory(dirPath);
+				await vscode.workspace.fs.writeFile(targetPath, binaryData);
+			}
+
+			await this.writeAttemptMetadata(
+				attempt,
+				starterFiles.entrypoint,
+				attemptRoot,
+			);
+
+			const relativeEntrypoint = normalizeRelativePath(
+				starterFiles.entrypoint,
+				'challenge entrypoint',
+			);
+			const entrypointUri = vscode.Uri.joinPath(challengeRoot, relativeEntrypoint);
+			if (!(await uriExists(entrypointUri))) {
+				throw new Error(`Entrypoint not found for attempt ${attempt.id}.`);
+			}
+
+			this.workspace = {
+				attemptId: attempt.id,
+				attemptRootUri: attemptRoot,
+				challengeRootUri: challengeRoot,
+				entrypointUri,
+				challengeId: attempt.challengeId,
+			};
+		} catch (error) {
+			if (await uriExists(attemptRoot)) {
+				await vscode.workspace.fs.delete(attemptRoot, { recursive: true });
+			}
+			throw error;
+		}
+	}
+
 	public async openTestCase(
-		challengeId: string,
+		attempt: AttemptDto,
 		testPath: string,
 		testName: string,
 	): Promise<void> {
@@ -100,9 +183,9 @@ export class LearnerWorkspaceService {
 			throw new Error('The test path returned by the runner is invalid.');
 		}
 
-		const learnerRoot = await this.ensureWorkspace(challengeId);
+		const workspace = await this.ensureWorkspace(attempt);
 		const testFile = vscode.Uri.joinPath(
-			learnerRoot,
+			workspace.challengeRootUri,
 			...normalizedPath.split(path.sep),
 		);
 		if (!(await uriExists(testFile))) {
@@ -119,19 +202,43 @@ export class LearnerWorkspaceService {
 		});
 	}
 
-	private getTemplate(challengeId: string): ChallengeWorkspaceTemplate {
-		const template = this.templates.get(challengeId);
-		if (!template) {
-			throw new Error(`No local starter is configured for challenge ${challengeId}.`);
-		}
-		return template;
+	private async writeAttemptMetadata(
+		attempt: AttemptDto,
+		entrypoint: string,
+		attemptRoot: vscode.Uri,
+	): Promise<void> {
+		const metadata = {
+			schemaVersion: 1,
+			attemptId: attempt.id,
+			challengeId: attempt.challengeId,
+			challengeVersion: attempt.version,
+			entrypoint: entrypoint,
+		};
+
+		const filePath = vscode.Uri.joinPath(attemptRoot, this.attemptMetadataFileName);
+		const content = Buffer.from(JSON.stringify(metadata, null, 2), 'utf8');
+
+		await vscode.workspace.fs.writeFile(filePath, content);
+	}
+
+	private getWorkspacesRoot(): vscode.Uri {
+		return vscode.Uri.joinPath(this.storageRoot, 'learner-workspaces');
 	}
 }
 
-export interface ChallengeWorkspaceTemplate {
-	challengeId: string;
-	starterPath: string;
-	entrypointPath: string;
+function normalizeRelativePath(value: unknown, label: string): string {
+	if (typeof value !== 'string') {
+		throw new Error(`Invalid ${label} path.`);
+	}
+	const normalized = path.posix.normalize(value);
+	if (
+		path.posix.isAbsolute(normalized)
+		|| normalized === '..'
+		|| normalized.startsWith('../')
+	) {
+		throw new Error(`Unsafe ${label} path: ${value}`);
+	}
+	return normalized;
 }
 
 async function uriExists(uri: vscode.Uri): Promise<boolean> {

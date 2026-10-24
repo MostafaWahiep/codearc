@@ -200,12 +200,12 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		this.attemptSessionSnapshot = this.attemptSession.startTestRun();
 		this.render();
 		try {
-			const learnerRoot = await this.learnerWorkspace.ensureWorkspace(
-				current.challenge.id,
+			const workspace = await this.learnerWorkspace.ensureWorkspace(
+				current.attempt,
 			);
 			const evidence = await this.localTestRunner.run({
 				attemptId: current.attempt.id,
-				workspacePath: learnerRoot.fsPath,
+				workspacePath: workspace.challengeRootUri.fsPath,
 			});
 			this.attemptSessionSnapshot = this.attemptSession.completeTestRun(evidence);
 		} catch (error) {
@@ -229,7 +229,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 			throw new Error('Start the challenge before opening starter code.');
 		}
 		await this.learnerWorkspace.openWorkspace(
-			this.attemptSessionSnapshot.challenge.id,
+			this.attemptSessionSnapshot.attempt,
 		);
 		void vscode.window.showInformationMessage(
 			'CodeArc opened the learner folder. Your changes will be preserved.',
@@ -241,7 +241,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 			throw new Error('Open an attempt before viewing its public tests.');
 		}
 		await this.learnerWorkspace.openTestCase(
-			this.attemptSessionSnapshot.challenge.id,
+			this.attemptSessionSnapshot.attempt,
 			testPath,
 			testName,
 		);
