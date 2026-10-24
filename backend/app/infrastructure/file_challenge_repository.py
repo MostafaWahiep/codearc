@@ -8,9 +8,14 @@ from app.domain.challenge_level import (
     LoadedChallengeLevel,
 )
 from app.domain.level_section import LevelSection
+from app.domain.starter_file import StarterFile, StarterFiles
 from app.domain.test_bundle import PublicTestFile, TestCategory
 from app.infrastructure.challenge_manifest_mapper import map_challenge_manifest
-from app.repositories.challenge_repository import ChallengeNotFound, ChallengeRepository
+from app.repositories.challenge_repository import (
+    ChallengeNotFound,
+    ChallengeReleaseNotFound,
+    ChallengeRepository,
+)
 from app.validation.manifest_validator import (
     InvalidChallengeManifest,
     ManifestValidator,
@@ -22,10 +27,6 @@ VERSION_DIRECTORY_PATTERN = re.compile(r"^v[1-9]\d*$")
 
 
 class InvalidChallengePackage(ValueError):
-    pass
-
-
-class ChallengeReleaseNotFound(LookupError):
     pass
 
 
@@ -168,6 +169,66 @@ class FileChallengeRepository(ChallengeRepository):
             )
         return files
 
+    def load_starter_files(
+        self,
+        challenge_id: str,
+        version: str,
+    ) -> StarterFiles:
+        manifest = self.get_manifest(challenge_id, version)
+        challenge_path = self._challenges_root.joinpath(
+            manifest.id,
+            f"v{manifest.version}",
+        ).resolve()
+
+        starter_files_path = (challenge_path / manifest.starter_path).resolve()
+        self._require_path_within(
+            challenge_path,
+            starter_files_path,
+            "Starter path",
+        )
+
+        if not starter_files_path.is_dir():
+            raise InvalidChallengePackage(
+                "Challenge starter files directory does not exist: "
+                f"{starter_files_path}"
+            )
+
+        entrypoint_path = (challenge_path / manifest.entrypoint_path).resolve()
+        self._require_path_within(
+            starter_files_path,
+            entrypoint_path,
+            "Challenge entrypoint",
+        )
+        if not entrypoint_path.is_file():
+            raise InvalidChallengePackage(
+                f"Challenge entrypoint does not exist: {entrypoint_path}"
+            )
+
+        files = tuple(
+            StarterFile(
+                file_path=file_path.relative_to(starter_files_path).as_posix(),
+                content=self._read_text_within(
+                    starter_files_path,
+                    file_path,
+                    "starter file",
+                ),
+            )
+            for file_path in sorted(starter_files_path.rglob("*"))
+            if file_path.is_file()
+            and "__pycache__" not in file_path.parts
+            and file_path.suffix != ".pyc"
+        )
+        if not files:
+            raise InvalidChallengePackage(
+                f"Challenge starter files directory is empty: {starter_files_path}"
+            )
+        return StarterFiles(
+            challenge_id=manifest.id,
+            version=manifest.version,
+            entrypoint=entrypoint_path.relative_to(starter_files_path).as_posix(),
+            files=files,
+        )
+
     def _load_manifests(self) -> dict[tuple[str, str], ChallengeManifest]:
         if not self._challenges_root.is_dir():
             raise InvalidChallengePackage(
@@ -299,4 +360,17 @@ class FileChallengeRepository(ChallengeRepository):
         except (OSError, UnicodeDecodeError) as error:
             raise InvalidChallengePackage(
                 f"Could not read {description}: {resolved_file_path}"
+            ) from error
+
+    @staticmethod
+    def _require_path_within(
+        root: Path,
+        path: Path,
+        description: str,
+    ) -> None:
+        try:
+            path.relative_to(root)
+        except ValueError as error:
+            raise InvalidChallengePackage(
+                f"{description} '{path}' points outside allowed directory '{root}'"
             ) from error

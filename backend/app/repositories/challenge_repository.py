@@ -2,6 +2,7 @@ from typing import Protocol
 
 from app.domain.challenge import ChallengeManifest
 from app.domain.challenge_level import LoadedChallengeLevel
+from app.domain.starter_file import StarterFiles
 from app.domain.test_bundle import PublicTestFile
 
 
@@ -9,6 +10,10 @@ class ChallengeNotFound(LookupError):
     def __init__(self, challenge_id: str) -> None:
         super().__init__(f"Challenge '{challenge_id}' was not found")
         self.challenge_id = challenge_id
+
+
+class ChallengeReleaseNotFound(LookupError):
+    pass
 
 
 class ChallengeRepository(Protocol):
@@ -50,4 +55,11 @@ class ChallengeRepository(Protocol):
         version: str,
         level_id: str,
     ) -> tuple[PublicTestFile, ...]:
+        ...
+
+    def load_starter_files(
+        self,
+        challenge_id: str,
+        version: str,
+    ) -> StarterFiles:
         ...

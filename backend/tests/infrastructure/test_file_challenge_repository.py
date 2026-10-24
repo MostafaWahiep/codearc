@@ -6,12 +6,14 @@ from unittest.mock import Mock
 
 from app.infrastructure.file_challenge_repository import (
     ChallengeLevelNotFound,
-    ChallengeReleaseNotFound,
     FileChallengeRepository,
     InvalidChallengePackage,
 )
 from app.domain.level_section import SectionDisplay
-from app.repositories.challenge_repository import ChallengeNotFound
+from app.repositories.challenge_repository import (
+    ChallengeNotFound,
+    ChallengeReleaseNotFound,
+)
 from app.validation.manifest_validator import ManifestValidator
 
 
@@ -202,8 +204,85 @@ class FileChallengeRepositoryTests(unittest.TestCase):
     def test_rejects_invalid_version_directory(self) -> None:
         self._write_manifest("search-engine", "01")
 
-        with self.assertRaisesRegex(InvalidChallengePackage, "Invalid version directory"):
+        with self.assertRaisesRegex(
+            InvalidChallengePackage,
+            "Invalid version directory",
+        ):
             FileChallengeRepository(self.challenges_root, self.validator)
+
+    def test_loads_versioned_starter_files_recursively(self) -> None:
+        self._write_manifest("search-engine", "2")
+        self._write_content(
+            "search-engine",
+            "2",
+            "starter/search_engine.py",
+            "class SearchEngine:\n    pass\n",
+        )
+        self._write_content(
+            "search-engine",
+            "2",
+            "starter/helpers/tokenize.py",
+            "def tokenize(text):\n    return text.split()\n",
+        )
+        repository = FileChallengeRepository(self.challenges_root, self.validator)
+
+        starter_files = repository.load_starter_files("search-engine", "2")
+
+        self.assertEqual(starter_files.challenge_id, "search-engine")
+        self.assertEqual(starter_files.version, "2")
+        self.assertEqual(starter_files.entrypoint, "search_engine.py")
+        self.assertEqual(
+            tuple(file.file_path for file in starter_files.files),
+            ("helpers/tokenize.py", "search_engine.py"),
+        )
+
+    def test_rejects_missing_starter_directory(self) -> None:
+        self._write_manifest("search-engine", "1")
+        repository = FileChallengeRepository(self.challenges_root, self.validator)
+
+        with self.assertRaisesRegex(InvalidChallengePackage, "does not exist"):
+            repository.load_starter_files("search-engine", "1")
+
+    def test_rejects_starter_path_outside_challenge_release(self) -> None:
+        self._write_manifest(
+            "search-engine",
+            "1",
+            starter_path="../shared-starter",
+            entrypoint_path="../shared-starter/search_engine.py",
+        )
+        self._write_content(
+            "search-engine",
+            "1",
+            "../shared-starter/search_engine.py",
+            "secret",
+        )
+        repository = FileChallengeRepository(self.challenges_root, self.validator)
+
+        with self.assertRaisesRegex(InvalidChallengePackage, "outside"):
+            repository.load_starter_files("search-engine", "1")
+
+    def test_rejects_entrypoint_outside_starter_directory(self) -> None:
+        self._write_manifest(
+            "search-engine",
+            "1",
+            entrypoint_path="main.py",
+        )
+        self._write_content(
+            "search-engine",
+            "1",
+            "starter/helper.py",
+            "pass\n",
+        )
+        self._write_content(
+            "search-engine",
+            "1",
+            "main.py",
+            "pass\n",
+        )
+        repository = FileChallengeRepository(self.challenges_root, self.validator)
+
+        with self.assertRaisesRegex(InvalidChallengePackage, "outside"):
+            repository.load_starter_files("search-engine", "1")
 
     def _write_manifest(
         self,
@@ -213,6 +292,8 @@ class FileChallengeRepositoryTests(unittest.TestCase):
         manifest_id: str | None = None,
         manifest_version: str | None = None,
         sections: list[dict[str, str]] | None = None,
+        starter_path: str = "starter",
+        entrypoint_path: str = "starter/search_engine.py",
     ) -> Path:
         manifest_path = (
             self.challenges_root
@@ -226,8 +307,8 @@ class FileChallengeRepositoryTests(unittest.TestCase):
             "version": manifest_version or version,
             "title": "Build a Search Engine",
             "description": "Build an evolving search engine.",
-            "starterPath": "starter",
-            "entrypointPath": "starter/search_engine.py",
+            "starterPath": starter_path,
+            "entrypointPath": entrypoint_path,
             "levels": [
                 {
                     "id": "single-term-search",

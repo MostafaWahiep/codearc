@@ -1,5 +1,6 @@
 from app.domain.challenge import ChallengeSummary
 from app.domain.challenge_level import LevelProgressStatus, VisibleLevel
+from app.domain.starter_file import StarterFiles
 from app.repositories.challenge_repository import ChallengeRepository
 
 
@@ -53,4 +54,14 @@ class ChallengeService:
             status=LevelProgressStatus.ACTIVE,
             sections=level.sections,
             design_feedback=None,
+        )
+
+    def load_starter_files(
+        self,
+        challenge_id: str,
+        version: str,
+    ) -> StarterFiles:
+        return self._challenge_repository.load_starter_files(
+            challenge_id,
+            version,
         )

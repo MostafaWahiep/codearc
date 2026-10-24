@@ -8,6 +8,7 @@ from app.domain.challenge_level import (
     LoadedChallengeLevel,
 )
 from app.domain.level_section import LevelSection, SectionDisplay
+from app.domain.starter_file import StarterFile, StarterFiles
 from app.repositories.challenge_repository import ChallengeRepository
 from app.services.challenge_service import ChallengeService
 
@@ -82,6 +83,30 @@ class ChallengeServiceTests(unittest.TestCase):
             "level-1",
         )
         repository.load_design_feedback.assert_not_called()
+
+    def test_loads_starter_files_from_repository(self) -> None:
+        repository = Mock(spec=ChallengeRepository)
+        expected = StarterFiles(
+            challenge_id="search-engine",
+            version="1",
+            entrypoint="search_engine.py",
+            files=(
+                StarterFile(
+                    file_path="search_engine.py",
+                    content="class SearchEngine:\n    pass\n",
+                ),
+            ),
+        )
+        repository.load_starter_files.return_value = expected
+        service = ChallengeService(repository)
+
+        result = service.load_starter_files("search-engine", "1")
+
+        self.assertIs(result, expected)
+        repository.load_starter_files.assert_called_once_with(
+            "search-engine",
+            "1",
+        )
 
     @staticmethod
     def _manifest(
