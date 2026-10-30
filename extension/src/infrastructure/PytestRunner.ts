@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
@@ -10,26 +9,18 @@ import type {
 	NormalizedTestCase,
 	TestEvidence,
 } from '../application/LocalTestRunner';
-
-export interface CommandResult {
-	exitCode: number | null;
-	stdout: string;
-	stderr: string;
-	timedOut: boolean;
-}
-
-export type CommandExecutor = (
-	command: string,
-	args: string[],
-	options: { cwd: string; timeoutMilliseconds: number },
-) => Promise<CommandResult>;
+import {
+	executeProcess,
+	type ProcessExecutor,
+	type ProcessResult,
+} from './ProcessExecutor';
 
 export class PytestRunner implements LocalTestRunner {
 	private running = false;
 
 	public constructor(
 		private readonly backendClient: BackendClient,
-		private readonly execute: CommandExecutor = executeCommand,
+		private readonly execute: ProcessExecutor = executeProcess,
 		private readonly timeoutMilliseconds = 30_000,
 	) {}
 
@@ -194,7 +185,7 @@ async function listPythonFiles(root: string): Promise<string[]> {
 }
 
 function normalizeEvidence(
-	result: CommandResult,
+	result: ProcessResult,
 	runnerVersion: string,
 	codeHash: string,
 	durationMilliseconds: number,
@@ -253,37 +244,4 @@ function failureSummary(output: string, testName: string): string | undefined {
 		(candidate) => /^(FAILED|ERROR) /.test(candidate) && candidate.includes(testName),
 	);
 	return line?.replace(/^(FAILED|ERROR)\s+/, '');
-}
-
-function executeCommand(
-	command: string,
-	args: string[],
-	options: { cwd: string; timeoutMilliseconds: number },
-): Promise<CommandResult> {
-	return new Promise((resolve, reject) => {
-		const child = spawn(command, args, {
-			cwd: options.cwd,
-			stdio: ['ignore', 'pipe', 'pipe'],
-		});
-		let stdout = '';
-		let stderr = '';
-		let timedOut = false;
-		const timeout = setTimeout(() => {
-			timedOut = true;
-			child.kill('SIGKILL');
-		}, options.timeoutMilliseconds);
-
-		child.stdout.setEncoding('utf8');
-		child.stderr.setEncoding('utf8');
-		child.stdout.on('data', (chunk: string) => { stdout += chunk; });
-		child.stderr.on('data', (chunk: string) => { stderr += chunk; });
-		child.on('error', (error) => {
-			clearTimeout(timeout);
-			reject(error);
-		});
-		child.on('close', (exitCode) => {
-			clearTimeout(timeout);
-			resolve({ exitCode, stdout, stderr, timedOut });
-		});
-	});
 }

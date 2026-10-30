@@ -4,11 +4,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { BackendClient } from '../backend/BackendClient';
 import type { PublicTestBundleDto } from '../backend/BackendTypes';
-import {
-	PytestRunner,
-	type CommandExecutor,
-	type CommandResult,
-} from '../infrastructure/PytestRunner';
+import type {
+	ProcessExecutor,
+	ProcessResult,
+} from '../infrastructure/ProcessExecutor';
+import { PytestRunner } from '../infrastructure/PytestRunner';
 
 suite('PytestRunner', () => {
 	let workspacePath: string;
@@ -125,7 +125,7 @@ suite('PytestRunner', () => {
 				? path.join(attemptRoot, '.venv', 'Scripts', 'python.exe')
 				: path.join(attemptRoot, '.venv', 'bin', 'python');
 			const calls: Array<{ command: string; cwd: string }> = [];
-			const execute: CommandExecutor = async (command, args, options) => {
+			const execute: ProcessExecutor = async (command, args, options) => {
 				calls.push({ command, cwd: options.cwd });
 				if (args.includes('--version')) {
 					return commandResult(0, args.includes('pytest')
@@ -151,7 +151,7 @@ suite('PytestRunner', () => {
 	});
 
 	test('reports an actionable error when Python is missing', async () => {
-		const execute: CommandExecutor = async () => {
+		const execute: ProcessExecutor = async () => {
 			throw new Error('ENOENT');
 		};
 		const runner = new PytestRunner(createBackendClient(testBundle()), execute);
@@ -167,10 +167,10 @@ suite('PytestRunner', () => {
 	});
 
 	test('rejects a concurrent run', async () => {
-		let releaseRun: ((result: CommandResult) => void) | undefined;
+		let releaseRun: ((result: ProcessResult) => void) | undefined;
 		let markRunStarted: (() => void) | undefined;
 		const runStarted = new Promise<void>((resolve) => { markRunStarted = resolve; });
-		const execute: CommandExecutor = async (_command, args) => {
+		const execute: ProcessExecutor = async (_command, args) => {
 			if (args.includes('--version')) {
 				return commandResult(0, 'pytest 9.0.0\n');
 			}
@@ -201,7 +201,7 @@ suite('PytestRunner', () => {
 	});
 
 	test('captures timeout evidence', async () => {
-		const execute: CommandExecutor = async (_command, args) => {
+		const execute: ProcessExecutor = async (_command, args) => {
 			if (args.includes('--version')) {
 				return commandResult(0, 'pytest 9.0.0\n');
 			}
@@ -262,7 +262,7 @@ function testBundle(): PublicTestBundleDto {
 	};
 }
 
-function createSuccessfulExecutor(): CommandExecutor {
+function createSuccessfulExecutor(): ProcessExecutor {
 	return async (_command, args) => {
 		if (args.includes('--version')) {
 			return commandResult(0, 'pytest 9.0.0\n');
@@ -274,7 +274,7 @@ function createSuccessfulExecutor(): CommandExecutor {
 	};
 }
 
-function createPassingExecutor(): CommandExecutor {
+function createPassingExecutor(): ProcessExecutor {
 	return async (_command, args) => {
 		if (args.includes('--version')) {
 			return commandResult(0, 'pytest 9.0.0\n');
@@ -296,7 +296,7 @@ function testOutput(current: 'PASSED' | 'FAILED', regression: 'PASSED' | 'FAILED
 	].join('\n');
 }
 
-function commandResult(exitCode: number | null, stdout: string): CommandResult {
+function commandResult(exitCode: number | null, stdout: string): ProcessResult {
 	return {
 		exitCode,
 		stdout,
