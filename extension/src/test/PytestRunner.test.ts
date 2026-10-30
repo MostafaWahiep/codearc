@@ -9,6 +9,7 @@ import type {
 	ProcessResult,
 } from '../infrastructure/ProcessExecutor';
 import { PytestRunner } from '../infrastructure/PytestRunner';
+import type { PythonRuntime } from '../infrastructure/PythonRuntimeManager';
 
 suite('PytestRunner', () => {
 	let workspacePath: string;
@@ -29,13 +30,13 @@ suite('PytestRunner', () => {
 	test('materializes backend tests and normalizes current and regression evidence', async () => {
 		const runner = new PytestRunner(
 			createBackendClient(testBundle()),
+			createPythonRuntime(),
 			createSuccessfulExecutor(),
 		);
 
 		const evidence = await runner.run({
 			attemptId: 'attempt-1',
 			workspacePath,
-			environmentPath: workspacePath,
 		});
 
 		assert.strictEqual(evidence.passed, false);
@@ -86,84 +87,51 @@ suite('PytestRunner', () => {
 	test('changes the code hash when learner Python changes', async () => {
 		const runner = new PytestRunner(
 			createBackendClient(testBundle()),
+			createPythonRuntime(),
 			createPassingExecutor(),
 		);
 		const first = await runner.run({
 			attemptId: 'attempt-1',
 			workspacePath,
-			environmentPath: workspacePath,
 		});
 		await fs.mkdir(path.join(workspacePath, '.venv'), { recursive: true });
 		await fs.writeFile(path.join(workspacePath, '.venv', 'dependency.py'), 'ignored\n');
 		const withEnvironment = await runner.run({
 			attemptId: 'attempt-1',
 			workspacePath,
-			environmentPath: workspacePath,
 		});
 		await fs.appendFile(path.join(workspacePath, 'search_engine.py'), '# changed\n');
 
 		const second = await runner.run({
 			attemptId: 'attempt-1',
 			workspacePath,
-			environmentPath: workspacePath,
 		});
 
 		assert.strictEqual(first.codeHash, withEnvironment.codeHash);
 		assert.notStrictEqual(first.codeHash, second.codeHash);
 	});
 
-	test('uses the attempt-root virtual environment while running in the challenge root', async () => {
-		const attemptRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'codearc-attempt-'));
-		try {
-			const challengeRoot = path.join(attemptRoot, 'search-engine');
-			await fs.mkdir(challengeRoot);
-			await fs.writeFile(
-				path.join(challengeRoot, 'search_engine.py'),
-				'class SearchEngine:\n    pass\n',
-			);
-			const expectedPython = process.platform === 'win32'
-				? path.join(attemptRoot, '.venv', 'Scripts', 'python.exe')
-				: path.join(attemptRoot, '.venv', 'bin', 'python');
-			const calls: Array<{ command: string; cwd: string }> = [];
-			const execute: ProcessExecutor = async (command, args, options) => {
-				calls.push({ command, cwd: options.cwd });
-				if (args.includes('--version')) {
-					return commandResult(0, args.includes('pytest')
-						? 'pytest 9.0.0\n'
-						: 'Python 3.14.0\n');
-				}
-				return commandResult(0, testOutput('PASSED', 'PASSED'));
-			};
-			const runner = new PytestRunner(createBackendClient(testBundle()), execute);
-
-			await runner.run({
-				attemptId: 'attempt-1',
-				workspacePath: challengeRoot,
-				environmentPath: attemptRoot,
-			});
-
-			assert.ok(calls.length >= 3);
-			assert.ok(calls.every((call) => call.command === expectedPython));
-			assert.ok(calls.every((call) => call.cwd === challengeRoot));
-		} finally {
-			await fs.rm(attemptRoot, { recursive: true, force: true });
-		}
-	});
-
-	test('reports an actionable error when Python is missing', async () => {
-		const execute: ProcessExecutor = async () => {
-			throw new Error('ENOENT');
+	test('uses the runtime Python while running in the challenge root', async () => {
+		const expectedPython = '/codearc/runtime/python';
+		const calls: Array<{ command: string; cwd: string }> = [];
+		const execute: ProcessExecutor = async (command, args, options) => {
+			calls.push({ command, cwd: options.cwd });
+			if (args.includes('--version')) {
+				return commandResult(0, 'pytest 9.0.0\n');
+			}
+			return commandResult(0, testOutput('PASSED', 'PASSED'));
 		};
-		const runner = new PytestRunner(createBackendClient(testBundle()), execute);
-
-		await assert.rejects(
-			runner.run({
-				attemptId: 'attempt-1',
-				workspacePath,
-				environmentPath: workspacePath,
-			}),
-			/Python was not found/,
+		const runner = new PytestRunner(
+			createBackendClient(testBundle()),
+			createPythonRuntime(expectedPython),
+			execute,
 		);
+
+		await runner.run({ attemptId: 'attempt-1', workspacePath });
+
+		assert.ok(calls.length >= 2);
+		assert.ok(calls.every((call) => call.command === expectedPython));
+		assert.ok(calls.every((call) => call.cwd === workspacePath));
 	});
 
 	test('rejects a concurrent run', async () => {
@@ -180,11 +148,14 @@ suite('PytestRunner', () => {
 			}
 			return commandResult(0, 'Python 3.14.0\n');
 		};
-		const runner = new PytestRunner(createBackendClient(testBundle()), execute);
+		const runner = new PytestRunner(
+			createBackendClient(testBundle()),
+			createPythonRuntime(),
+			execute,
+		);
 		const firstRun = runner.run({
 			attemptId: 'attempt-1',
 			workspacePath,
-			environmentPath: workspacePath,
 		});
 		await runStarted;
 
@@ -192,7 +163,6 @@ suite('PytestRunner', () => {
 			runner.run({
 				attemptId: 'attempt-1',
 				workspacePath,
-				environmentPath: workspacePath,
 			}),
 			/already in progress/,
 		);
@@ -210,12 +180,15 @@ suite('PytestRunner', () => {
 			}
 			return commandResult(0, 'Python 3.14.0\n');
 		};
-		const runner = new PytestRunner(createBackendClient(testBundle()), execute);
+		const runner = new PytestRunner(
+			createBackendClient(testBundle()),
+			createPythonRuntime(),
+			execute,
+		);
 
 		const evidence = await runner.run({
 			attemptId: 'attempt-1',
 			workspacePath,
-			environmentPath: workspacePath,
 		});
 
 		assert.strictEqual(evidence.passed, false);
@@ -224,6 +197,14 @@ suite('PytestRunner', () => {
 		assert.strictEqual(evidence.failures[0].name, 'pytest timed out');
 	});
 });
+
+function createPythonRuntime(
+	pythonPath = '/codearc/runtime/python',
+): PythonRuntime {
+	return {
+		ensureReady: async () => pythonPath,
+	};
+}
 
 function createBackendClient(bundle: PublicTestBundleDto): BackendClient {
 	return {

@@ -235,7 +235,6 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 			const evidence = await this.localTestRunner.run({
 				attemptId: current.attempt.id,
 				workspacePath: workspace.challengeRootUri.fsPath,
-				environmentPath: workspace.attemptRootUri.fsPath,
 			});
 			this.attemptSessionSnapshot = this.attemptSession.completeTestRun(evidence);
 		} catch (error) {

@@ -14,12 +14,14 @@ import {
 	type ProcessExecutor,
 	type ProcessResult,
 } from './ProcessExecutor';
+import type { PythonRuntime } from './PythonRuntimeManager';
 
 export class PytestRunner implements LocalTestRunner {
 	private running = false;
 
 	public constructor(
 		private readonly backendClient: BackendClient,
+		private readonly runtime: PythonRuntime,
 		private readonly execute: ProcessExecutor = executeProcess,
 		private readonly timeoutMilliseconds = 30_000,
 	) {}
@@ -35,10 +37,7 @@ export class PytestRunner implements LocalTestRunner {
 			await ensureDirectory(request.workspacePath);
 			const bundle = await this.backendClient.getVisibleTests(request.attemptId);
 			const testsPath = await materializeTests(request.workspacePath, bundle);
-			const python = await this.findPython(
-				request.environmentPath,
-				request.workspacePath,
-			);
+			const python = await this.runtime.ensureReady(request.workspacePath);
 			const versionResult = await this.execute(
 				python,
 				['-m', 'pytest', '--version'],
@@ -49,7 +48,7 @@ export class PytestRunner implements LocalTestRunner {
 			);
 			if (versionResult.exitCode !== 0) {
 				throw new Error(
-					'pytest is not available. Install it with `python3 -m pip install pytest`.',
+					'pytest is unavailable in CodeArc\'s shared Python environment.',
 				);
 			}
 
@@ -80,35 +79,8 @@ export class PytestRunner implements LocalTestRunner {
 			this.running = false;
 		}
 	}
-
-	private async findPython(environmentPath: string, cwd: string): Promise<string> {
-		const workspaceInterpreters = process.platform === 'win32'
-			? [
-				path.join(environmentPath, '.venv', 'Scripts', 'python.exe'),
-				path.join(environmentPath, 'venv', 'Scripts', 'python.exe'),
-			]
-			: [
-				path.join(environmentPath, '.venv', 'bin', 'python'),
-				path.join(environmentPath, 'venv', 'bin', 'python'),
-			];
-		for (const command of [...workspaceInterpreters, 'python3', 'python']) {
-			try {
-				const result = await this.execute(command, ['--version'], {
-					cwd,
-					timeoutMilliseconds: 5_000,
-				});
-				if (result.exitCode === 0) {
-					return command;
-				}
-			} catch {
-				// Try the next standard Python command.
-			}
-		}
-		throw new Error(
-			'Python was not found. Install Python 3 and make `python3` available in PATH.',
-		);
-	}
 }
+
 async function ensureDirectory(workspacePath: string): Promise<void> {
 	const stat = await fs.stat(workspacePath).catch(() => undefined);
 	if (!stat?.isDirectory()) {

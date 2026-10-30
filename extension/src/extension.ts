@@ -6,8 +6,11 @@ import { HttpBackendClient } from './backend/HttpBackendClient';
 import { registerStartChallengeCommand } from './commands/startChallenge';
 import { LearnerWorkspaceService } from './infrastructure/LearnerWorkspaceService';
 import { PytestRunner } from './infrastructure/PytestRunner';
+import { PythonRuntimeManager } from './infrastructure/PythonRuntimeManager';
 import { VsCodeMarkdownRenderer } from './infrastructure/VsCodeMarkdownRenderer';
 import { ChallengeViewProvider } from './views/ChallengeViewProvider';
+
+const PYTHON_RUNTIME_ID = 'python-runner-v1';
 
 export function activate(context: vscode.ExtensionContext) {
 	const prototypeUserId = '11111111-1111-4111-8111-111111111111';
@@ -22,7 +25,8 @@ export function activate(context: vscode.ExtensionContext) {
 		context.globalStorageUri,
 		backendClient,
 	);
-	const localTestRunner = new PytestRunner(backendClient);
+	const pythonRuntime = createPythonRuntime(context);
+	const localTestRunner = new PytestRunner(backendClient, pythonRuntime);
 	const markdownRenderer = new VsCodeMarkdownRenderer();
 	const viewProvider = new ChallengeViewProvider(
 		challengeCatalog,
@@ -55,3 +59,21 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {}
+
+function createPythonRuntime(
+	context: vscode.ExtensionContext,
+): PythonRuntimeManager {
+	return new PythonRuntimeManager({
+		rootPath: vscode.Uri.joinPath(
+			context.globalStorageUri,
+			'runtimes',
+			PYTHON_RUNTIME_ID,
+		).fsPath,
+		requirementsPath: vscode.Uri.joinPath(
+			context.extensionUri,
+			'resources',
+			'python-runner',
+			'requirements.txt',
+		).fsPath,
+	});
+}
