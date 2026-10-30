@@ -11,6 +11,11 @@ export interface WorkspaceEntry {
 	challengeId: string;
 }
 
+export interface OpenFolderOptions {
+	forceNewWindow?: boolean;
+	forceReuseWindow?: boolean;
+}
+
 export class LearnerWorkspaceService {
 	private workspace: WorkspaceEntry | undefined;
 	private readonly attemptMetadataFileName = 'attempt.json';
@@ -21,6 +26,19 @@ export class LearnerWorkspaceService {
 		private readonly getWorkspaceFolders: () => readonly vscode.WorkspaceFolder[] | undefined = (
 			() => vscode.workspace.workspaceFolders
 		),
+		private readonly getWorkspaceFile: () => vscode.Uri | undefined = (
+			() => vscode.workspace.workspaceFile
+		),
+		private readonly openFolder: (
+			folder: vscode.Uri,
+			options: OpenFolderOptions,
+		) => Promise<void> = async (folder, options) => {
+			await vscode.commands.executeCommand(
+				'vscode.openFolder',
+				folder,
+				options,
+			);
+		},
 	) {}
 
 	public async findOpenedAttemptWorkspace(): Promise<WorkspaceEntry | undefined> {
@@ -136,20 +154,37 @@ export class LearnerWorkspaceService {
 
 	public async openWorkspace(attempt: AttemptDto): Promise<void> {
 		const workspace = await this.ensureWorkspace(attempt);
+		const workspaceFolders = this.getWorkspaceFolders();
 
-		const isAlreadyOpen = vscode.workspace.workspaceFolders?.some(
-			(folder) => folder.uri.toString() === workspace.challengeRootUri.toString(),
-		) ?? false;
+		const isWindowEmpty =
+			(workspaceFolders?.length ?? 0) === 0
+			&& this.getWorkspaceFile() === undefined;
 
-		if (!isAlreadyOpen) {
-			await vscode.commands.executeCommand(
-				'vscode.openFolder',
+		if (isWindowEmpty) {
+			await this.openFolder(
 				workspace.challengeRootUri,
 				{ forceReuseWindow: true },
 			);
 			return;
 		}
 
+		const isAlreadyOpen = workspaceFolders?.some(
+			(folder) => folder.uri.toString() === workspace.challengeRootUri.toString(),
+		) ?? false;
+
+		if (!isAlreadyOpen) {
+			await this.openFolder(
+				workspace.challengeRootUri,
+				{ forceNewWindow: true },
+			);
+			return;
+		}
+
+		await this.openEntrypoint(attempt);
+	}
+
+	public async openEntrypoint(attempt: AttemptDto): Promise<void> {
+		const workspace = await this.ensureWorkspace(attempt);
 		const document = await vscode.workspace.openTextDocument(workspace.entrypointUri);
 		await vscode.window.showTextDocument(document, { preview: false });
 	}

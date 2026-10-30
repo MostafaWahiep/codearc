@@ -8,7 +8,10 @@ import type {
 	AttemptDto,
 	StarterFilesDto,
 } from '../backend/BackendTypes';
-import { LearnerWorkspaceService } from '../infrastructure/LearnerWorkspaceService';
+import {
+	LearnerWorkspaceService,
+	type OpenFolderOptions,
+} from '../infrastructure/LearnerWorkspaceService';
 
 const attemptId = '22222222-2222-4222-8222-222222222222';
 
@@ -265,7 +268,119 @@ suite('LearnerWorkspaceService', () => {
 			/Unsafe attempt entrypoint path/,
 		);
 	});
+
+	test('reuses an empty window when opening an attempt', async () => {
+		const openFolderCalls: OpenFolderCall[] = [];
+		const service = createWorkspaceOpeningService(
+			storagePath,
+			undefined,
+			undefined,
+			openFolderCalls,
+		);
+
+		await service.openWorkspace(attempt());
+
+		assertOpenFolderCall(
+			openFolderCalls,
+			storagePath,
+			{ forceReuseWindow: true },
+		);
+	});
+
+	test('opens a new window when another project is open', async () => {
+		const openFolderCalls: OpenFolderCall[] = [];
+		const unrelatedFolder = workspaceFolder(path.join(storagePath, 'other-project'));
+		const service = createWorkspaceOpeningService(
+			storagePath,
+			[unrelatedFolder],
+			undefined,
+			openFolderCalls,
+		);
+
+		await service.openWorkspace(attempt());
+
+		assertOpenFolderCall(
+			openFolderCalls,
+			storagePath,
+			{ forceNewWindow: true },
+		);
+	});
+
+	test('opens a new window when an empty workspace file is open', async () => {
+		const openFolderCalls: OpenFolderCall[] = [];
+		const service = createWorkspaceOpeningService(
+			storagePath,
+			[],
+			vscode.Uri.file(path.join(storagePath, 'existing.code-workspace')),
+			openFolderCalls,
+		);
+
+		await service.openWorkspace(attempt());
+
+		assertOpenFolderCall(
+			openFolderCalls,
+			storagePath,
+			{ forceNewWindow: true },
+		);
+	});
+
+	test('opens the entrypoint when the attempt folder is already open', async () => {
+		const challengeRoot = path.join(
+			expectedAttemptRoot(storagePath),
+			'search-engine',
+		);
+		const openFolderCalls: OpenFolderCall[] = [];
+		const service = createWorkspaceOpeningService(
+			storagePath,
+			[workspaceFolder(challengeRoot)],
+			undefined,
+			openFolderCalls,
+		);
+
+		await service.openWorkspace(attempt());
+
+		assert.deepStrictEqual(openFolderCalls, []);
+		assert.strictEqual(
+			vscode.window.activeTextEditor?.document.uri.fsPath,
+			path.join(challengeRoot, 'search_engine.py'),
+		);
+	});
 });
+
+interface OpenFolderCall {
+	folder: vscode.Uri;
+	options: OpenFolderOptions;
+}
+
+function createWorkspaceOpeningService(
+	storagePath: string,
+	workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined,
+	workspaceFile: vscode.Uri | undefined,
+	openFolderCalls: OpenFolderCall[],
+): LearnerWorkspaceService {
+	return new LearnerWorkspaceService(
+		vscode.Uri.file(storagePath),
+		createBackendClient(async () => starterFiles()),
+		() => workspaceFolders,
+		() => workspaceFile,
+		async (folder, options) => {
+			openFolderCalls.push({ folder, options });
+		},
+	);
+}
+
+function assertOpenFolderCall(
+	calls: OpenFolderCall[],
+	storagePath: string,
+	expectedOptions: OpenFolderOptions,
+): void {
+	assert.strictEqual(calls.length, 1);
+	assert.strictEqual(
+		calls[0].folder.fsPath,
+		path.join(expectedAttemptRoot(storagePath), 'search-engine'),
+	);
+	assert.deepStrictEqual(calls[0].options, expectedOptions);
+}
 
 function attempt(): AttemptDto {
 	return {

@@ -62,6 +62,10 @@ suite('Workspace attempt restoration', () => {
 		assert.strictEqual(snapshot?.attempt.id, attemptId);
 		assert.strictEqual(snapshot?.challenge.id, 'search-engine');
 		assert.strictEqual(snapshot?.level.id, 'single-term-search');
+		assert.strictEqual(
+			vscode.window.activeTextEditor?.document.uri.fsPath,
+			path.join(challengeRoot, 'search_engine.py'),
+		);
 	});
 });
 

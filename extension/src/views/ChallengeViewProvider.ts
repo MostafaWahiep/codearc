@@ -111,6 +111,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 
 		await this.learnerWorkspace.ensureWorkspace(openedAttempt.attempt);
 		this.openAttemptSession(openedAttempt);
+		await this.learnerWorkspace.openEntrypoint(openedAttempt.attempt);
 		this.render();
 	}
 
@@ -180,14 +181,18 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 
 	private async startNewAttempt(challengeId: string): Promise<void> {
 		const openedAttempt = await this.attemptCatalog.startNew(challengeId);
-		this.openAttemptSession(openedAttempt);
-		this.render();
+		await this.enterAttempt(openedAttempt);
 	}
 
 	private async continueAttempt(attemptId: string): Promise<void> {
 		const openedAttempt = await this.attemptCatalog.continue(attemptId);
+		await this.enterAttempt(openedAttempt);
+	}
+
+	private async enterAttempt(openedAttempt: OpenedAttempt): Promise<void> {
 		this.openAttemptSession(openedAttempt);
 		this.render();
+		await this.openWorkspace();
 	}
 
 	private openAttemptSession(openedAttempt: OpenedAttempt): void {
