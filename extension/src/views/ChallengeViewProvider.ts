@@ -84,16 +84,10 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		await this.loadAttempts(availableChallenge.id);
 	}
 
-	public async showChallenge(): Promise<void> {
-		if (!this.attemptSessionSnapshot) {
-			await this.startChallenge();
-		}
-	}
-
-	public async restoreOpenedWorkspace(): Promise<void> {
+	public async restoreOpenedWorkspace(): Promise<boolean> {
 		const workspace = await this.learnerWorkspace.findOpenedAttemptWorkspace();
 		if (!workspace) {
-			return;
+			return false;
 		}
 
 		await this.loadChallengeCatalog();
@@ -113,6 +107,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		this.openAttemptSession(openedAttempt);
 		await this.learnerWorkspace.openEntrypoint(openedAttempt.attempt);
 		this.render();
+		return true;
 	}
 
 	private async handleMessage(message: unknown): Promise<void> {

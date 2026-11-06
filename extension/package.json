@@ -11,8 +11,7 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onView:codearc.challengeView",
-    "onCommand:codearc.startChallenge"
+    "onView:codearc.challengeView"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -43,14 +42,7 @@
           "type": "webview"
         }
       ]
-    },
-    "commands": [
-      {
-        "command": "codearc.startChallenge",
-        "title": "Start Challenge",
-        "category": "CodeArc"
-      }
-    ]
+    }
   },
   "dependencies": {
     "@codearc/shared": "0.0.1"

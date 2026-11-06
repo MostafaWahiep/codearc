@@ -3,7 +3,6 @@ import { AttemptCatalog } from './application/AttemptCatalog';
 import { AttemptSession } from './application/AttemptSession';
 import { ChallengeCatalog } from './application/ChallengeCatalog';
 import { HttpBackendClient } from './backend/HttpBackendClient';
-import { registerStartChallengeCommand } from './commands/startChallenge';
 import { LearnerWorkspaceService } from './infrastructure/LearnerWorkspaceService';
 import { PytestRunner } from './infrastructure/PytestRunner';
 import { PythonRuntimeManager } from './infrastructure/PythonRuntimeManager';
@@ -47,10 +46,9 @@ export function activate(context: vscode.ExtensionContext) {
 				},
 			},
 		),
-		registerStartChallengeCommand(viewProvider),
 	);
 
-	void viewProvider.restoreOpenedWorkspace().catch((error: unknown) => {
+	void restoreOpenedAttempt(viewProvider).catch((error: unknown) => {
 		const message = error instanceof Error ? error.message : String(error);
 		void vscode.window.showErrorMessage(
 			`CodeArc could not restore the opened attempt: ${message}`,
@@ -59,6 +57,16 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {}
+
+async function restoreOpenedAttempt(
+	viewProvider: ChallengeViewProvider,
+): Promise<void> {
+	if (!await viewProvider.restoreOpenedWorkspace()) {
+		return;
+	}
+
+	await vscode.commands.executeCommand('workbench.view.extension.codearc');
+}
 
 function createPythonRuntime(
 	context: vscode.ExtensionContext,

@@ -340,7 +340,8 @@ export class LearnerWorkspaceService {
 	}
 
 	private getWorkspacesRoot(): vscode.Uri {
-		return vscode.Uri.joinPath(this.storageRoot, 'learner-workspaces');
+		const localStorageRoot = vscode.Uri.file(this.storageRoot.fsPath);
+		return vscode.Uri.joinPath(localStorageRoot, 'learner-workspaces');
 	}
 }
 

@@ -56,8 +56,9 @@ suite('Workspace attempt restoration', () => {
 			passthroughMarkdownRenderer,
 		);
 
-		await provider.restoreOpenedWorkspace();
+		const restored = await provider.restoreOpenedWorkspace();
 
+		assert.strictEqual(restored, true);
 		const snapshot = attemptSession.getSnapshot();
 		assert.strictEqual(snapshot?.attempt.id, attemptId);
 		assert.strictEqual(snapshot?.challenge.id, 'search-engine');

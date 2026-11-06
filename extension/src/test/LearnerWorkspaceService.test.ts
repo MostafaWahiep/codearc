@@ -287,6 +287,30 @@ suite('LearnerWorkspaceService', () => {
 		);
 	});
 
+	test('opens a file URI when extension storage uses vscode-userdata', async () => {
+		const openFolderCalls: OpenFolderCall[] = [];
+		const service = new LearnerWorkspaceService(
+			vscode.Uri.from({
+				scheme: 'vscode-userdata',
+				path: storagePath,
+			}),
+			createBackendClient(async () => starterFiles()),
+			() => undefined,
+			() => undefined,
+			async (folder, options) => {
+				openFolderCalls.push({ folder, options });
+			},
+		);
+
+		await service.openWorkspace(attempt());
+
+		assertOpenFolderCall(
+			openFolderCalls,
+			storagePath,
+			{ forceReuseWindow: true },
+		);
+	});
+
 	test('opens a new window when another project is open', async () => {
 		const openFolderCalls: OpenFolderCall[] = [];
 		const unrelatedFolder = workspaceFolder(path.join(storagePath, 'other-project'));
@@ -379,6 +403,7 @@ function assertOpenFolderCall(
 		calls[0].folder.fsPath,
 		path.join(expectedAttemptRoot(storagePath), 'search-engine'),
 	);
+	assert.strictEqual(calls[0].folder.scheme, 'file');
 	assert.deepStrictEqual(calls[0].options, expectedOptions);
 }
 
