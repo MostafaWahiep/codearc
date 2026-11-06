@@ -23,24 +23,24 @@ For longer phrases, every successive term must appear at the next position. This
 
 ## Costs of positional information
 
-Positions make phrase queries more efficient, but they increase index size and indexing complexity. Replacing a document must remove all its previous positional postings before adding new ones.
+Positions make phrase queries more efficient, but they increase index size and indexing complexity.
 
 This illustrates a recurring systems tradeoff: additional work and storage during writes can make later reads substantially faster.
 
 ## Evolving without breaking earlier behavior
 
-The final query language now supports three distinct operations through one stable API:
+The final API now exposes three focused search operations:
 
 ```text
-python                 exact term
-py*                    prefix
-"distributed systems"  phrase
+search_term("python")
+search_prefix("py")
+search_phrase("distributed systems")
 ```
 
-Because each new form has explicit syntax, the earlier meanings remain unchanged and all previous tests can run as regressions.
+Because each requirement adds a new method, the meanings of earlier methods remain unchanged and all previous tests can run as regressions. The tradeoff is a larger public API, but callers do not need to learn a query syntax or depend on one method to classify several kinds of input.
 
 ## Further extensions
 
-A production search engine would need to make additional decisions about punctuation, Unicode normalization, stop words, stemming, ranking, and quoted phrases containing escaped characters. Those concerns are intentionally outside this challenge so learners can focus on how changing requirements influence data-structure design.
+A production search engine would need to make additional decisions about punctuation, Unicode normalization, stop words, stemming, and ranking. Those concerns are intentionally outside this challenge so learners can focus on how changing requirements influence data-structure design.
 
 Review your implementation across all three levels. Identify which early decisions made extension easier, which required redesign, and whether that redesign was avoidable or simply a natural response to new requirements.

@@ -1,9 +1,10 @@
-Keep the existing public API:
+Keep the Level 1 methods and add one new method for prefix search:
 
 ```python
 engine = SearchEngine()
-engine.index(document_id, text)
-results = engine.search(query)
+engine.add_document(document_id, text)
+exact_matches = engine.search_term(term)
+prefix_matches = engine.search_prefix(prefix)
 ```
 
-Do not add a separate prefix-search method. Extend how `search(query)` interprets a query while keeping existing callers working.
+Do not change or remove `add_document` or `search_term`. Existing Level 1 callers must continue to work.

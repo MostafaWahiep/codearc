@@ -20,7 +20,7 @@ For a small local challenge, this may be the best tradeoff. A simpler design is 
 
 With a sorted vocabulary, the engine can use binary search to find the first possible match and then read consecutive terms until the prefix stops matching.
 
-This reduces the amount of vocabulary examined during a search, but maintaining sorted data makes indexing and document replacement more complicated.
+This reduces the amount of vocabulary examined during a search, but maintaining sorted data makes adding documents more complicated.
 
 ## Use a trie
 
@@ -30,14 +30,14 @@ Tries can make prefix lookup efficient, especially when many terms share prefixe
 
 ## Preserve behavior across levels
 
-Using a trailing wildcard keeps exact and prefix queries distinct:
+Adding a focused method keeps exact and prefix search distinct:
 
 ```text
-python -> exact term
-py*    -> prefix
+search_term("python") -> exact term
+search_prefix("py")   -> prefix
 ```
 
-This allows the Level 1 behavior and tests to remain valid. Extending an interface without silently changing its previous meaning is an important part of evolving software safely.
+This allows the Level 1 behavior and tests to remain valid while the public API grows. Adding a new operation without silently changing an earlier method's meaning is an important part of evolving software safely.
 
 ## Reflection checkpoint
 

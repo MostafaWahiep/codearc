@@ -1,12 +1,12 @@
 ```python
 engine = SearchEngine()
 
-engine.index("doc-1", "Python programming")
-engine.index("doc-2", "Progressive web applications")
-engine.index("doc-3", "Product design")
+engine.add_document("doc-1", "Python programming")
+engine.add_document("doc-2", "Progressive web applications")
+engine.add_document("doc-3", "Product design")
 
-assert engine.search("pro*") == ["doc-1", "doc-2", "doc-3"]
-assert engine.search("prog*") == ["doc-1", "doc-2"]
-assert engine.search("python") == ["doc-1"]
-assert engine.search("py") == []
+assert sorted(engine.search_prefix("pro")) == ["doc-1", "doc-2", "doc-3"]
+assert sorted(engine.search_prefix("prog")) == ["doc-1", "doc-2"]
+assert engine.search_term("python") == ["doc-1"]
+assert engine.search_term("py") == []
 ```

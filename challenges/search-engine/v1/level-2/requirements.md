@@ -1,15 +1,13 @@
-A query ending in `*` is a prefix query:
+Add a prefix-search method:
 
 ```python
-engine.search("pro*")
+engine.search_prefix("pro")
 ```
-
-The text before `*` is the prefix. Queries without `*` remain exact-term searches.
 
 - A prefix query matches a document when at least one complete term begins with the requested prefix.
 - Prefix matching is case-insensitive.
 - A document appears only once, even when several of its terms match the prefix.
-- Results follow the order in which documents were first indexed.
+- Matching document IDs may be returned in any order.
 - An unknown prefix returns an empty list.
-- An empty prefix (`"*"`) returns an empty list.
-- Only a single trailing `*` has special meaning.
+- An empty prefix returns an empty list.
+- `add_document` and `search_term` must keep their Level 1 behavior.

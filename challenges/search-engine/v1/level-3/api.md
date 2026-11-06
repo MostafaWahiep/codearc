@@ -1,9 +1,11 @@
-Keep the existing public API:
+Keep the earlier methods and add one new method for phrase search:
 
 ```python
 engine = SearchEngine()
-engine.index(document_id, text)
-results = engine.search(query)
+engine.add_document(document_id, text)
+exact_matches = engine.search_term(term)
+prefix_matches = engine.search_prefix(prefix)
+phrase_matches = engine.search_phrase(phrase)
 ```
 
-Do not add a separate phrase-search method. Extend how `search(query)` interprets a query while keeping existing callers working.
+Do not change or remove the Level 1 and Level 2 methods. Existing callers must continue to work.
