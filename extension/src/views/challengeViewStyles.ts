@@ -442,6 +442,76 @@ code {
 .test-case-passed .test-mark { color: var(--vscode-testing-iconPassed); }
 .test-case-failed .test-mark { color: var(--vscode-testing-iconFailed); }
 
+.run-error {
+	margin-top: 16px;
+	padding: 11px;
+	border-left: 3px solid var(--vscode-testing-iconFailed);
+	background: var(--vscode-textBlockQuote-background);
+}
+.run-error > p:not(.eyebrow) { margin: 4px 0 9px; }
+.run-error-facts {
+	display: grid;
+	gap: 7px;
+	margin: 10px 0 2px;
+}
+.run-error-facts div {
+	display: grid;
+	gap: 2px;
+}
+.run-error-facts dt {
+	color: var(--vscode-descriptionForeground);
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+.run-error-facts dd { margin: 0; }
+.run-error-facts code {
+	display: inline-block;
+	max-width: 100%;
+	overflow-wrap: anywhere;
+}
+.technical-details {
+	min-width: 0;
+	max-width: 100%;
+	margin-top: 10px;
+}
+.technical-details summary {
+	width: fit-content;
+	cursor: pointer;
+	color: var(--vscode-textLink-foreground);
+	font-size: 11px;
+}
+.technical-details pre {
+	box-sizing: border-box;
+	width: 100%;
+	max-height: 220px;
+	margin: 7px 0 0;
+	padding: 10px 12px;
+	overflow-x: auto;
+	overflow-y: auto;
+	border: 1px solid color-mix(in srgb, var(--vscode-foreground) 28%, transparent);
+	border-radius: 6px;
+	background: var(--vscode-editor-background);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vscode-foreground) 4%, transparent);
+	white-space: pre;
+	word-break: normal;
+	overflow-wrap: normal;
+}
+.technical-details pre code {
+	padding: 0;
+	background: transparent;
+}
+.failure-kind {
+	margin: 0 0 6px;
+	font-weight: 600;
+}
+.failure-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+
 .test-failure,
 .run-details {
 	margin: 7px 0 0 22px;
@@ -453,28 +523,33 @@ code {
 	cursor: pointer;
 	color: var(--vscode-textLink-foreground);
 }
-.failure-comparison {
+.failure-comparison,
+.test-output {
 	display: grid;
 	gap: 6px;
 }
-.failure-comparison div {
+.failure-comparison div,
+.test-output {
 	display: grid;
 	min-width: 0;
 	gap: 2px;
 }
-.failure-comparison span {
+.failure-comparison span,
+.test-output span {
 	color: var(--vscode-descriptionForeground);
 	font-size: 9px;
 	font-weight: 700;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
 }
-.failure-comparison code {
+.failure-comparison code,
+.test-output code {
 	display: block;
 	padding: 5px 7px;
 	overflow-wrap: anywhere;
 	white-space: pre-wrap;
 }
+.test-output { margin-top: 6px; }
 .failure-message {
 	margin: 0;
 	overflow-wrap: anywhere;

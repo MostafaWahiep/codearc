@@ -112,7 +112,7 @@ export class AttemptSession {
 		this.snapshot = {
 			...current,
 			selectedSection: ChallengeSection.Results,
-			testStatus: evidence.passed ? 'passed' : 'failed',
+			testStatus: evidence.outcome === 'passed' ? 'passed' : 'failed',
 			latestTestEvidence: evidence,
 		};
 		return this.getRequiredSnapshot();
@@ -123,7 +123,7 @@ export class AttemptSession {
 		this.snapshot = {
 			...current,
 			testStatus: current.latestTestEvidence
-				? current.latestTestEvidence.passed ? 'passed' : 'failed'
+				? current.latestTestEvidence.outcome === 'passed' ? 'passed' : 'failed'
 				: 'idle',
 		};
 		return this.getRequiredSnapshot();

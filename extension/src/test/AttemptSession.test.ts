@@ -29,7 +29,7 @@ suite('AttemptSession', () => {
 
 		const running = session.startTestRun();
 		const complete = session.completeTestRun({
-			passed: true,
+			outcome: 'passed',
 			passedCount: 1,
 			failedCount: 0,
 			totalCount: 1,
@@ -85,7 +85,7 @@ suite('AttemptSession', () => {
 		const session = new AttemptSession(createBackendClient());
 		session.open(challengeSummary(), openedAttempt());
 		session.completeTestRun(testEvidence({
-			passed: false,
+			outcome: 'test_failures',
 			passedCount: 0,
 			failedCount: 1,
 			exitCode: 1,
@@ -167,7 +167,7 @@ suite('AttemptSession', () => {
 		const session = new AttemptSession(backendClient);
 		session.open(challengeSummary(), openedAttempt());
 		session.completeTestRun(testEvidence({
-			passed: false,
+			outcome: 'test_failures',
 			passedCount: 0,
 			failedCount: 1,
 			exitCode: 1,
@@ -413,7 +413,7 @@ function testEvidence(
 	overrides: Partial<TestEvidence> = {},
 ): TestEvidence {
 	return {
-		passed: true,
+		outcome: 'passed',
 		passedCount: 1,
 		failedCount: 0,
 		totalCount: 1,

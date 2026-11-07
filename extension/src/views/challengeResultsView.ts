@@ -1,5 +1,10 @@
 import type { AttemptSessionSnapshot } from '../application/AttemptSession';
-import type { NormalizedTestCase } from '../application/LocalTestRunner';
+import type {
+	NormalizedTestCase,
+	TestEvidence,
+	TestRunError,
+	TestRunOutcome,
+} from '../application/LocalTestRunner';
 import { ChallengeViewAction } from './ChallengeViewAction';
 import { escapeHtml, formatDuration } from './viewFormatting';
 
@@ -52,23 +57,21 @@ export function renderBackendResults(snapshot: AttemptSessionSnapshot): string {
 
 	const currentTests = evidence.testCases.filter((testCase) => testCase.category === 'current');
 	const regressionTests = evidence.testCases.filter((testCase) => testCase.category === 'regression');
-	const heading = evidence.passed ? 'All public tests passed' : 'Some tests need attention';
-	const statusClass = evidence.passed ? 'passed' : 'failed';
+	const heading = runOutcomeHeading(evidence.outcome);
+	const passed = evidence.outcome === 'passed';
+	const statusClass = passed ? 'passed' : 'failed';
 
 	return `<section class="card" aria-live="polite">
 		${renderSubmissionNotice(snapshot)}
 		<div class="check-summary">
-			<span class="check-icon check-icon-${statusClass}" aria-hidden="true">${evidence.passed ? '✓' : '×'}</span>
+			<span class="check-icon check-icon-${statusClass}" aria-hidden="true">${passed ? '✓' : '×'}</span>
 			<div class="check-summary-content">
 				<p class="eyebrow">Local test evidence</p>
 				<h2>${heading}</h2>
-				<div class="run-meta">
-					<span>${evidence.passedCount} passed</span>
-					${evidence.failedCount > 0 ? `<span>${evidence.failedCount} failed</span>` : ''}
-					<span>${formatDuration(evidence.durationMilliseconds)}</span>
-				</div>
+				${renderRunMeta(evidence)}
 			</div>
 		</div>
+		${evidence.runError ? renderRunError(evidence.outcome, evidence.runError) : ''}
 		${renderCurrentTests(currentTests, snapshot.level.title)}
 		${renderRegressionTests(regressionTests)}
 		<details class="run-details">
@@ -85,6 +88,75 @@ export function renderBackendResults(snapshot: AttemptSessionSnapshot): string {
 		<button class="action action-secondary" type="button" data-action="${ChallengeViewAction.RunChecks}">Run checks again</button>
 		<button class="action" type="button" data-action="${ChallengeViewAction.SubmitSolution}">Submit solution</button>
 	</div>`;
+}
+
+function runOutcomeHeading(outcome: TestRunOutcome): string {
+	switch (outcome) {
+		case 'passed':
+			return 'All public tests passed';
+		case 'test_failures':
+			return 'Some tests need attention';
+		case 'code_error':
+			return 'Your code could not be loaded';
+		case 'runner_error':
+			return 'Tests could not be run';
+		case 'timed_out':
+			return 'The test run timed out';
+	}
+}
+
+function renderRunMeta(evidence: TestEvidence): string {
+	const counts = evidence.totalCount === 0
+		? '<span>0 tests run</span>'
+		: `<span>${evidence.passedCount} passed</span>
+			${evidence.failedCount > 0 ? `<span>${evidence.failedCount} failed</span>` : ''}`;
+	return `<div class="run-meta">
+		${counts}
+		<span>${formatDuration(evidence.durationMilliseconds)}</span>
+	</div>`;
+}
+
+function renderRunError(outcome: TestRunOutcome, error: TestRunError): string {
+	const copy = runErrorCopy(outcome);
+	return `<section class="run-error" role="alert">
+		<p class="eyebrow">${copy.label}</p>
+		<p>${copy.description}</p>
+		<dl class="run-error-facts">
+			<div><dt>Error</dt><dd><code>${escapeHtml(error.message)}</code></dd></div>
+			${error.sourcePath && error.sourceLine
+				? `<div><dt>Location</dt><dd><code>${escapeHtml(error.sourcePath)}:${error.sourceLine}</code></dd></div>`
+				: ''}
+		</dl>
+		${error.sourcePath && error.sourceLine
+			? renderOpenLearnerSourceAction(error.sourcePath, error.sourceLine)
+			: ''}
+		${renderTechnicalDetails(error.details)}
+	</section>`;
+}
+
+function runErrorCopy(outcome: TestRunOutcome): { label: string; description: string } {
+	switch (outcome) {
+		case 'code_error':
+			return {
+				label: 'Learner code error',
+				description: 'No tests ran. Pytest stopped while loading your code.',
+			};
+		case 'timed_out':
+			return {
+				label: 'Time limit exceeded',
+				description: 'The test run did not finish within CodeArc’s time limit. Check for slow code or an infinite loop.',
+			};
+		case 'runner_error':
+			return {
+				label: 'Test runner error',
+				description: 'CodeArc could not complete the test run. Your implementation may not be the cause.',
+			};
+		default:
+			return {
+				label: 'Test run error',
+				description: 'CodeArc could not complete the test run.',
+			};
+	}
 }
 
 function renderSubmissionNotice(snapshot: AttemptSessionSnapshot): string {
@@ -207,62 +279,75 @@ function renderTestCase(testCase: NormalizedTestCase, showLevel: boolean): strin
 				${showLevel ? `<span class="test-level">${escapeHtml(formatLevelName(testCase.levelId))}</span>` : ''}
 			</div>
 		</div>
-		${testCase.details ? renderFailureDetails(testCase.details, testCase.name) : ''}
+		${passed ? '' : renderFailureDetails(testCase)}
 	</li>`;
 }
 
-function renderFailureDetails(details: string, testName: string): string {
-	const { location, message } = splitFailureDetails(details);
-	const comparison = parseEqualityAssertion(message);
+function renderFailureDetails(testCase: NormalizedTestCase): string {
+	const message = testCase.message ?? 'Test did not pass.';
+	const traceback = testCase.traceback?.trim();
+	const actions = [
+		testCase.sourcePath && testCase.sourceLine
+			? renderOpenLearnerSourceAction(testCase.sourcePath, testCase.sourceLine)
+			: '',
+		testCase.testPath
+			? renderOpenTestCaseAction(
+				testCase.testPath,
+				testCase.testFunctionName ?? testCase.name,
+			) : '',
+	].filter(Boolean).join('');
 	return `<div class="test-failure">
-		${comparison ? `<div class="failure-comparison">
-			<div><span>Expected</span><code>${escapeHtml(comparison.expected)}</code></div>
-			<div><span>Received</span><code>${escapeHtml(comparison.received)}</code></div>
+		${renderFailureKind(testCase.failureKind)}
+		${testCase.comparison ? `<div class="failure-comparison">
+			<div><span>Expected</span><code>${escapeHtml(testCase.comparison.expected)}</code></div>
+			<div><span>Received</span><code>${escapeHtml(testCase.comparison.received)}</code></div>
 		</div>` : `<p class="failure-message">${escapeHtml(message)}</p>`}
-		${location ? renderOpenTestCaseAction(location, testName) : ''}
+		${testCase.stdout ? `<div class="test-output"><span>Output</span><code>${escapeHtml(testCase.stdout)}</code></div>` : ''}
+		${actions ? `<div class="failure-actions">${actions}</div>` : ''}
+		${traceback ? renderTechnicalDetails(traceback) : ''}
 	</div>`;
 }
 
-function renderOpenTestCaseAction(location: string, testName: string): string {
-	const testPath = location.split('::', 1)[0];
-	const functionName = testName.split('[', 1)[0];
+function renderFailureKind(
+	failureKind: NormalizedTestCase['failureKind'],
+): string {
+	switch (failureKind) {
+		case 'learner_error':
+			return '<p class="failure-kind">Your code raised an unexpected error while this test ran.</p>';
+		case 'test_error':
+			return '<p class="failure-kind">This test could not complete normally.</p>';
+		case 'timed_out':
+			return '<p class="failure-kind">This test was still running when CodeArc’s time limit expired.</p>';
+		default:
+			return '';
+	}
+}
+
+function renderOpenLearnerSourceAction(sourcePath: string, sourceLine: number): string {
+	return `<button
+		class="test-source-link"
+		type="button"
+		data-action="${ChallengeViewAction.OpenLearnerSource}"
+		data-source-path="${escapeHtml(sourcePath)}"
+		data-source-line="${sourceLine}"
+	>Open your code ↗</button>`;
+}
+
+function renderOpenTestCaseAction(testPath: string, testFunctionName: string): string {
 	return `<button
 		class="test-source-link"
 		type="button"
 		data-action="${ChallengeViewAction.OpenTestCase}"
 		data-test-path="${escapeHtml(testPath)}"
-		data-test-name="${escapeHtml(functionName)}"
+		data-test-name="${escapeHtml(testFunctionName)}"
 	>Open test case ↗</button>`;
 }
 
-function splitFailureDetails(details: string): {
-	location?: string;
-	message: string;
-} {
-	const separatorIndex = details.indexOf(' - ');
-	if (separatorIndex < 0) {
-		return { message: details };
-	}
-
-	return {
-		location: details.slice(0, separatorIndex).trim(),
-		message: details.slice(separatorIndex + 3).trim(),
-	};
-}
-
-function parseEqualityAssertion(message: string): {
-	expected: string;
-	received: string;
-} | undefined {
-	const match = /^AssertionError:\s*assert\s+(.+?)\s*==\s*(.+)$/s.exec(message);
-	if (!match) {
-		return undefined;
-	}
-
-	return {
-		received: match[1].trim(),
-		expected: match[2].trim(),
-	};
+function renderTechnicalDetails(details: string): string {
+	return `<details class="technical-details">
+		<summary>Details</summary>
+		<pre><code>${escapeHtml(details)}</code></pre>
+	</details>`;
 }
 
 function formatTestName(name: string): string {

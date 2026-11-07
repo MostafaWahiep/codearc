@@ -10,8 +10,18 @@ import type {
 } from '../infrastructure/ProcessExecutor';
 import { PytestRunner } from '../infrastructure/PytestRunner';
 import type { PythonRuntime } from '../infrastructure/PythonRuntimeManager';
+import {
+	assertionFailure,
+	passingTest,
+	reportText,
+	runFinished,
+	runStarted,
+	testFinished,
+	type ReportEvent,
+} from './CodeArcTestReportFixtures';
 
 suite('PytestRunner', () => {
+	const runnerScriptPath = '/codearc/codearc_pytest_runner.py';
 	let workspacePath: string;
 
 	setup(async () => {
@@ -27,47 +37,24 @@ suite('PytestRunner', () => {
 		await fs.rm(workspacePath, { recursive: true, force: true });
 	});
 
-	test('materializes backend tests and normalizes current and regression evidence', async () => {
-		const runner = new PytestRunner(
-			createBackendClient(testBundle()),
-			createPythonRuntime(),
-			createSuccessfulExecutor(),
-		);
+	test('materializes backend tests and reads normalized evidence', async () => {
+		const runner = createRunner(executorWithReport([
+			runStarted(),
+			testFinished('current', passingTest('test_prefix')),
+			testFinished('regression', assertionFailure('test_exact')),
+			runFinished(1),
+		], 1));
 
 		const evidence = await runner.run({
 			attemptId: 'attempt-1',
 			workspacePath,
 		});
 
-		assert.strictEqual(evidence.passed, false);
+		assert.strictEqual(evidence.outcome, 'test_failures');
 		assert.strictEqual(evidence.passedCount, 1);
 		assert.strictEqual(evidence.failedCount, 1);
-		assert.strictEqual(evidence.totalCount, 2);
-		assert.strictEqual(evidence.exitCode, 1);
-		assert.strictEqual(evidence.runnerVersion, 'pytest 9.0.0');
+		assert.strictEqual(evidence.runnerVersion, 'pytest 9.1.1');
 		assert.match(evidence.codeHash, /^[a-f0-9]{64}$/);
-		assert.deepStrictEqual(
-			evidence.testCases.map(({ name, levelId, category, status }) => ({
-				name,
-				levelId,
-				category,
-				status,
-			})),
-			[
-				{
-					name: 'test_prefix',
-					levelId: 'prefix-search',
-					category: 'current',
-					status: 'passed',
-				},
-				{
-					name: 'test_exact',
-					levelId: 'single-term-search',
-					category: 'regression',
-					status: 'failed',
-				},
-			],
-		);
 		assert.strictEqual(
 			await fs.readFile(
 				path.join(
@@ -84,126 +71,118 @@ suite('PytestRunner', () => {
 		);
 	});
 
-	test('changes the code hash when learner Python changes', async () => {
-		const runner = new PytestRunner(
-			createBackendClient(testBundle()),
-			createPythonRuntime(),
-			createPassingExecutor(),
-		);
-		const first = await runner.run({
-			attemptId: 'attempt-1',
-			workspacePath,
-		});
+	test('changes the code hash only when learner Python changes', async () => {
+		const runner = createRunner(executorWithReport([
+			runStarted(),
+			testFinished('prefix', passingTest('test_prefix')),
+			runFinished(0),
+		], 0));
+		const first = await runner.run({ attemptId: 'attempt-1', workspacePath });
 		await fs.mkdir(path.join(workspacePath, '.venv'), { recursive: true });
 		await fs.writeFile(path.join(workspacePath, '.venv', 'dependency.py'), 'ignored\n');
-		const withEnvironment = await runner.run({
-			attemptId: 'attempt-1',
-			workspacePath,
-		});
+		const withEnvironment = await runner.run({ attemptId: 'attempt-1', workspacePath });
 		await fs.appendFile(path.join(workspacePath, 'search_engine.py'), '# changed\n');
-
-		const second = await runner.run({
-			attemptId: 'attempt-1',
-			workspacePath,
-		});
+		const changed = await runner.run({ attemptId: 'attempt-1', workspacePath });
 
 		assert.strictEqual(first.codeHash, withEnvironment.codeHash);
-		assert.notStrictEqual(first.codeHash, second.codeHash);
+		assert.notStrictEqual(first.codeHash, changed.codeHash);
 	});
 
-	test('uses the runtime Python while running in the challenge root', async () => {
+	test('executes the bundled adapter with the runtime Python', async () => {
 		const expectedPython = '/codearc/runtime/python';
-		const calls: Array<{ command: string; cwd: string }> = [];
+		const calls: Array<{ command: string; args: string[]; cwd: string }> = [];
 		const execute: ProcessExecutor = async (command, args, options) => {
-			calls.push({ command, cwd: options.cwd });
-			if (args.includes('--version')) {
-				return commandResult(0, 'pytest 9.0.0\n');
-			}
-			return commandResult(0, testOutput('PASSED', 'PASSED'));
+			calls.push({ command, args, cwd: options.cwd });
+			await writeReport(args, [
+				runStarted(),
+				testFinished('prefix', passingTest('test_prefix')),
+				runFinished(0),
+			]);
+			return processResult(0, '1 passed\n');
 		};
 		const runner = new PytestRunner(
 			createBackendClient(testBundle()),
 			createPythonRuntime(expectedPython),
+			runnerScriptPath,
 			execute,
 		);
 
 		await runner.run({ attemptId: 'attempt-1', workspacePath });
 
-		assert.ok(calls.length >= 2);
-		assert.ok(calls.every((call) => call.command === expectedPython));
-		assert.ok(calls.every((call) => call.cwd === workspacePath));
+		assert.strictEqual(calls.length, 1);
+		assert.strictEqual(calls[0].command, expectedPython);
+		assert.strictEqual(calls[0].args[0], runnerScriptPath);
+		assert.strictEqual(calls[0].cwd, workspacePath);
+		assert.strictEqual(argumentValue(calls[0].args, '--workspace'), workspacePath);
+		assert.match(argumentValue(calls[0].args, '--tests'), /\.codearc\/tests$/);
 	});
 
 	test('rejects a concurrent run', async () => {
 		let releaseRun: ((result: ProcessResult) => void) | undefined;
-		let markRunStarted: (() => void) | undefined;
-		const runStarted = new Promise<void>((resolve) => { markRunStarted = resolve; });
+		let markStarted: (() => void) | undefined;
+		const started = new Promise<void>((resolve) => { markStarted = resolve; });
 		const execute: ProcessExecutor = async (_command, args) => {
-			if (args.includes('--version')) {
-				return commandResult(0, 'pytest 9.0.0\n');
-			}
-			if (args.includes('pytest')) {
-				markRunStarted?.();
-				return new Promise((resolve) => { releaseRun = resolve; });
-			}
-			return commandResult(0, 'Python 3.14.0\n');
+			await writeReport(args, [
+				runStarted(),
+				testFinished('prefix', passingTest('test_prefix')),
+				runFinished(0),
+			]);
+			markStarted?.();
+			return new Promise((resolve) => { releaseRun = resolve; });
 		};
-		const runner = new PytestRunner(
-			createBackendClient(testBundle()),
-			createPythonRuntime(),
-			execute,
-		);
-		const firstRun = runner.run({
-			attemptId: 'attempt-1',
-			workspacePath,
-		});
-		await runStarted;
+		const runner = createRunner(execute);
+		const firstRun = runner.run({ attemptId: 'attempt-1', workspacePath });
+		await started;
 
 		await assert.rejects(
-			runner.run({
-				attemptId: 'attempt-1',
-				workspacePath,
-			}),
+			runner.run({ attemptId: 'attempt-1', workspacePath }),
 			/already in progress/,
 		);
-		releaseRun?.(commandResult(0, testOutput('PASSED', 'PASSED')));
+		releaseRun?.(processResult(0));
 		await firstRun;
 	});
 
-	test('captures timeout evidence', async () => {
-		const execute: ProcessExecutor = async (_command, args) => {
-			if (args.includes('--version')) {
-				return commandResult(0, 'pytest 9.0.0\n');
-			}
-			if (args.includes('pytest')) {
-				return { ...commandResult(null, ''), timedOut: true };
-			}
-			return commandResult(0, 'Python 3.14.0\n');
-		};
-		const runner = new PytestRunner(
+	test('returns actionable timeout evidence when no report was written', async () => {
+		const runner = createRunner(async () => ({
+			...processResult(null, 'F.....'),
+			timedOut: true,
+		}));
+
+		const evidence = await runner.run({ attemptId: 'attempt-1', workspacePath });
+
+		assert.strictEqual(evidence.outcome, 'timed_out');
+		assert.strictEqual(evidence.totalCount, 0);
+		assert.strictEqual(
+			evidence.runError?.details,
+			'The runner stopped before it reported which test was still running.',
+		);
+	});
+
+	test('surfaces adapter failures as runner errors', async () => {
+		const runner = createRunner(async () => processResult(
+			4,
+			'',
+			'Traceback: pytest could not start',
+		));
+
+		const evidence = await runner.run({ attemptId: 'attempt-1', workspacePath });
+
+		assert.strictEqual(evidence.outcome, 'runner_error');
+		assert.match(evidence.runError?.details ?? '', /pytest could not start/);
+	});
+
+	function createRunner(execute: ProcessExecutor): PytestRunner {
+		return new PytestRunner(
 			createBackendClient(testBundle()),
 			createPythonRuntime(),
+			runnerScriptPath,
 			execute,
 		);
-
-		const evidence = await runner.run({
-			attemptId: 'attempt-1',
-			workspacePath,
-		});
-
-		assert.strictEqual(evidence.passed, false);
-		assert.strictEqual(evidence.timedOut, true);
-		assert.strictEqual(evidence.exitCode, null);
-		assert.strictEqual(evidence.failures[0].name, 'pytest timed out');
-	});
+	}
 });
 
-function createPythonRuntime(
-	pythonPath = '/codearc/runtime/python',
-): PythonRuntime {
-	return {
-		ensureReady: async () => pythonPath,
-	};
+function createPythonRuntime(pythonPath = '/codearc/runtime/python'): PythonRuntime {
+	return { ensureReady: async () => pythonPath };
 }
 
 function createBackendClient(bundle: PublicTestBundleDto): BackendClient {
@@ -214,12 +193,8 @@ function createBackendClient(bundle: PublicTestBundleDto): BackendClient {
 		getAttempt: async () => { throw new Error('Not used'); },
 		getVisibleLevel: async () => { throw new Error('Not used'); },
 		getVisibleTests: async () => bundle,
-		submitTestResults: async () => {
-			throw new Error('Not used');
-		},
-		getStarterFiles: async () => {
-			throw new Error('Not implemented by this test fake.');
-		},
+		submitTestResults: async () => { throw new Error('Not used'); },
+		getStarterFiles: async () => { throw new Error('Not used'); },
 	};
 }
 
@@ -243,45 +218,30 @@ function testBundle(): PublicTestBundleDto {
 	};
 }
 
-function createSuccessfulExecutor(): ProcessExecutor {
+function executorWithReport(
+	events: ReportEvent[],
+	exitCode: number,
+): ProcessExecutor {
 	return async (_command, args) => {
-		if (args.includes('--version')) {
-			return commandResult(0, 'pytest 9.0.0\n');
-		}
-		if (args.includes('pytest')) {
-			return commandResult(1, testOutput('PASSED', 'FAILED'));
-		}
-		return commandResult(0, 'Python 3.14.0\n');
+		await writeReport(args, events);
+		return processResult(exitCode);
 	};
 }
 
-function createPassingExecutor(): ProcessExecutor {
-	return async (_command, args) => {
-		if (args.includes('--version')) {
-			return commandResult(0, 'pytest 9.0.0\n');
-		}
-		if (args.includes('pytest')) {
-			return commandResult(0, testOutput('PASSED', 'PASSED'));
-		}
-		return commandResult(0, 'Python 3.14.0\n');
-	};
+async function writeReport(args: string[], events: ReportEvent[]): Promise<void> {
+	await fs.writeFile(argumentValue(args, '--report'), reportText(events), 'utf8');
 }
 
-function testOutput(current: 'PASSED' | 'FAILED', regression: 'PASSED' | 'FAILED'): string {
-	return [
-		`.codearc/tests/current/prefix-search/test_prefix.py::test_prefix ${current} [ 50%]`,
-		`.codearc/tests/regression/single-term-search/test_search.py::test_exact ${regression} [100%]`,
-		regression === 'FAILED'
-			? 'FAILED .codearc/tests/regression/single-term-search/test_search.py::test_exact - AssertionError'
-			: '',
-	].join('\n');
+function argumentValue(args: string[], option: string): string {
+	const index = args.indexOf(option);
+	assert.ok(index >= 0 && args[index + 1], `Expected ${option} argument.`);
+	return args[index + 1];
 }
 
-function commandResult(exitCode: number | null, stdout: string): ProcessResult {
-	return {
-		exitCode,
-		stdout,
-		stderr: '',
-		timedOut: false,
-	};
+function processResult(
+	exitCode: number | null,
+	stdout = '',
+	stderr = '',
+): ProcessResult {
+	return { exitCode, stdout, stderr, timedOut: false };
 }

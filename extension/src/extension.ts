@@ -25,7 +25,16 @@ export function activate(context: vscode.ExtensionContext) {
 		backendClient,
 	);
 	const pythonRuntime = createPythonRuntime(context);
-	const localTestRunner = new PytestRunner(backendClient, pythonRuntime);
+	const localTestRunner = new PytestRunner(
+		backendClient,
+		pythonRuntime,
+		vscode.Uri.joinPath(
+			context.extensionUri,
+			'resources',
+			'python-runner',
+			'codearc_pytest_runner.py',
+		).fsPath,
+	);
 	const markdownRenderer = new VsCodeMarkdownRenderer();
 	const viewProvider = new ChallengeViewProvider(
 		challengeCatalog,

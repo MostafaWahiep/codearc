@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { BackendClient } from '../backend/BackendClient';
@@ -6,14 +6,13 @@ import type { PublicTestBundleDto } from '../backend/BackendTypes';
 import type {
 	LocalTestRunner,
 	LocalTestRunRequest,
-	NormalizedTestCase,
 	TestEvidence,
 } from '../application/LocalTestRunner';
 import {
 	executeProcess,
 	type ProcessExecutor,
-	type ProcessResult,
 } from './ProcessExecutor';
+import { readCodeArcTestReport } from './CodeArcTestReport';
 import type { PythonRuntime } from './PythonRuntimeManager';
 
 export class PytestRunner implements LocalTestRunner {
@@ -22,6 +21,7 @@ export class PytestRunner implements LocalTestRunner {
 	public constructor(
 		private readonly backendClient: BackendClient,
 		private readonly runtime: PythonRuntime,
+		private readonly runnerScriptPath: string,
 		private readonly execute: ProcessExecutor = executeProcess,
 		private readonly timeoutMilliseconds = 30_000,
 	) {}
@@ -32,35 +32,30 @@ export class PytestRunner implements LocalTestRunner {
 		}
 		this.running = true;
 		const startedAt = Date.now();
+		let reportPath: string | undefined;
 
 		try {
 			await ensureDirectory(request.workspacePath);
 			const bundle = await this.backendClient.getVisibleTests(request.attemptId);
 			const testsPath = await materializeTests(request.workspacePath, bundle);
 			const python = await this.runtime.ensureReady(request.workspacePath);
-			const versionResult = await this.execute(
-				python,
-				['-m', 'pytest', '--version'],
-				{
-					cwd: request.workspacePath,
-					timeoutMilliseconds: this.timeoutMilliseconds,
-				},
-			);
-			if (versionResult.exitCode !== 0) {
-				throw new Error(
-					'pytest is unavailable in CodeArc\'s shared Python environment.',
-				);
-			}
-
 			const codeHash = await hashLearnerCode(request.workspacePath);
+			reportPath = path.join(
+				request.workspacePath,
+				'.codearc',
+				'test-results',
+				`pytest-${randomUUID()}.jsonl`,
+			);
+			await fs.mkdir(path.dirname(reportPath), { recursive: true });
 			const result = await this.execute(
 				python,
 				[
-					'-m',
-					'pytest',
-					'-vv',
-					'--color=no',
-					'--tb=short',
+					this.runnerScriptPath,
+					'--report',
+					reportPath,
+					'--workspace',
+					request.workspacePath,
+					'--tests',
 					testsPath,
 				],
 				{
@@ -68,13 +63,21 @@ export class PytestRunner implements LocalTestRunner {
 					timeoutMilliseconds: this.timeoutMilliseconds,
 				},
 			);
-
-			return normalizeEvidence(
-				result,
-				versionResult.stdout.trim() || versionResult.stderr.trim(),
-				codeHash,
-				Date.now() - startedAt,
+			const reportText = await fs.readFile(reportPath, 'utf8').catch(
+				(error: NodeJS.ErrnoException) => {
+					if (error.code === 'ENOENT') {
+						return undefined;
+					}
+					throw error;
+				},
 			);
+
+			return readCodeArcTestReport({
+				reportText,
+				result,
+				codeHash,
+				durationMilliseconds: Date.now() - startedAt,
+			});
 		} finally {
 			this.running = false;
 		}
@@ -154,66 +157,4 @@ async function listPythonFiles(root: string): Promise<string[]> {
 	}
 	await visit(root);
 	return files.sort();
-}
-
-function normalizeEvidence(
-	result: ProcessResult,
-	runnerVersion: string,
-	codeHash: string,
-	durationMilliseconds: number,
-): TestEvidence {
-	const output = `${result.stdout}\n${result.stderr}`;
-	const testCases: NormalizedTestCase[] = [];
-	const casePattern = /^(.+?)::([^\s]+)\s+(PASSED|FAILED|ERROR)(?:\s+\[[^\]]+\])?$/gm;
-	for (const match of output.matchAll(casePattern)) {
-		const filePath = match[1];
-		const status = match[3] === 'PASSED' ? 'passed' : 'failed';
-		const category = filePath.includes(`${path.sep}regression${path.sep}`)
-			|| filePath.includes('/regression/')
-			? 'regression'
-			: 'current';
-		const pathParts = filePath.split(/[\\/]/);
-		const categoryIndex = pathParts.lastIndexOf(category);
-		const levelId = categoryIndex >= 0 ? pathParts[categoryIndex + 1] : 'unknown';
-		testCases.push({
-			name: match[2],
-			levelId,
-			category,
-			status,
-			details: status === 'failed' ? failureSummary(output, match[2]) : undefined,
-		});
-	}
-
-	if (testCases.length === 0 && result.exitCode !== 0) {
-		testCases.push({
-			name: result.timedOut ? 'pytest timed out' : 'pytest execution',
-			levelId: 'unknown',
-			category: 'current',
-			status: 'failed',
-			details: output.trim() || 'pytest exited without reporting test cases.',
-		});
-	}
-
-	const failures = testCases.filter((testCase) => testCase.status === 'failed');
-	const passedCount = testCases.length - failures.length;
-	return {
-		passed: result.exitCode === 0 && !result.timedOut,
-		passedCount,
-		failedCount: failures.length,
-		totalCount: testCases.length,
-		failures,
-		testCases,
-		exitCode: result.exitCode,
-		timedOut: result.timedOut,
-		runnerVersion,
-		codeHash,
-		durationMilliseconds,
-	};
-}
-
-function failureSummary(output: string, testName: string): string | undefined {
-	const line = output.split(/\r?\n/).find(
-		(candidate) => /^(FAILED|ERROR) /.test(candidate) && candidate.includes(testName),
-	);
-	return line?.replace(/^(FAILED|ERROR)\s+/, '');
 }

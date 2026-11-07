@@ -81,20 +81,38 @@ suite('Challenge view rendering', () => {
 		snapshot.selectedSection = ChallengeSection.Results;
 		snapshot.testStatus = 'failed';
 		snapshot.latestTestEvidence = {
-			passed: false,
+			outcome: 'test_failures',
 			passedCount: 1,
 			failedCount: 1,
 			totalCount: 2,
 			failures: [{
 				name: 'test_exact',
+				testPath: '.codearc/tests/regression/single-term-search/test_search.py',
 				levelId: 'single-term-search',
 				category: 'regression',
 				status: 'failed',
-				details: '.codearc/tests/regression/single-term-search/test_search.py::test_exact - AssertionError: assert [] == [\'doc-1\']',
+				message: 'AssertionError: assert [] == [\'doc-1\']\n  Right contains one more item: \'doc-1\'\n  Use -v to get more diff',
+				comparison: { received: '[]', expected: '[\'doc-1\']' },
+				stdout: 'indexed <doc-1>\n',
 			}],
 			testCases: [
-				{ name: 'test_prefix', levelId: 'prefix-search', category: 'current', status: 'passed' },
-				{ name: 'test_exact', levelId: 'single-term-search', category: 'regression', status: 'failed', details: '.codearc/tests/regression/single-term-search/test_search.py::test_exact - AssertionError: assert [] == [\'doc-1\']' },
+				{
+					name: 'test_prefix',
+					levelId: 'prefix-search',
+					category: 'current',
+					status: 'passed',
+					stdout: 'hidden passing output',
+				},
+				{
+					name: 'test_exact',
+					testPath: '.codearc/tests/regression/single-term-search/test_search.py',
+					levelId: 'single-term-search',
+					category: 'regression',
+					status: 'failed',
+					message: 'AssertionError: assert [] == [\'doc-1\']\n  Right contains one more item: \'doc-1\'\n  Use -v to get more diff',
+					comparison: { received: '[]', expected: '[\'doc-1\']' },
+					stdout: 'indexed <doc-1>\n',
+				},
 			],
 			exitCode: 1,
 			timedOut: false,
@@ -124,14 +142,169 @@ suite('Challenge view rendering', () => {
 		assert.match(html, /title="test_prefix"/);
 		assert.match(html, /<span>Expected<\/span><code>\[&#39;doc-1&#39;\]<\/code>/);
 		assert.match(html, /<span>Received<\/span><code>\[\]<\/code>/);
+		assert.match(html, /<span>Output<\/span><code>indexed &lt;doc-1&gt;\n<\/code>/);
+		assert.doesNotMatch(html, /hidden passing output/);
 		assert.match(html, /data-action="openTestCase"/);
 		assert.match(html, /data-test-path="\.codearc\/tests\/regression\/single-term-search\/test_search\.py"/);
 		assert.match(html, /data-test-name="test_exact"/);
 		assert.match(html, /Open test case/);
-		assert.doesNotMatch(html, /Technical details/);
+		assert.doesNotMatch(html, /<summary>Details<\/summary>/);
 		assert.match(html, /<details class="run-details">/);
 		assert.match(html, /pytest 9.0.0/);
 		assert.match(html, /1234567890ab/);
+	});
+
+	test('renders learner collection errors separately from failed tests', async () => {
+		const snapshot = createAttemptSessionSnapshot();
+		snapshot.selectedSection = ChallengeSection.Results;
+		snapshot.testStatus = 'failed';
+		snapshot.latestTestEvidence = {
+			outcome: 'code_error',
+			passedCount: 0,
+			failedCount: 0,
+			totalCount: 0,
+			failures: [],
+			testCases: [],
+			runError: {
+				message: 'AssertionError',
+				details: 'search_engine.py:4: in <module>\nE   AssertionError',
+				sourcePath: 'search_engine.py',
+				sourceLine: 4,
+			},
+			exitCode: 2,
+			timedOut: false,
+			runnerVersion: 'pytest 9.0.0',
+			codeHash: '1234567890abcdef',
+			durationMilliseconds: 607,
+		};
+
+		const html = await renderChallenge(
+			markdownRenderer,
+			createCatalogSnapshot(),
+			undefined,
+			snapshot,
+		);
+
+		assert.match(html, /Your code could not be loaded/);
+		assert.match(html, /0 tests run/);
+		assert.match(html, /No tests ran\. Pytest stopped while loading your code\./);
+		assert.match(html, /<dt>Error<\/dt>/);
+		assert.match(html, /<dt>Location<\/dt>/);
+		assert.match(html, /AssertionError/);
+		assert.match(html, /data-action="openLearnerSource"/);
+		assert.match(html, /data-source-path="search_engine.py"/);
+		assert.match(html, /data-source-line="4"/);
+		assert.match(html, /Open your code/);
+		assert.match(html, /<summary>Details<\/summary>/);
+		assert.doesNotMatch(html, /Open test case/);
+		assert.doesNotMatch(html, /1 failed/);
+	});
+
+	test('labels an exception raised during a test as a code error for that test', async () => {
+		const snapshot = createAttemptSessionSnapshot();
+		snapshot.selectedSection = ChallengeSection.Results;
+		snapshot.testStatus = 'failed';
+		snapshot.latestTestEvidence = {
+			outcome: 'test_failures',
+			passedCount: 0,
+			failedCount: 1,
+			totalCount: 1,
+			failures: [{
+				name: 'test_prefix',
+				testPath: '.codearc/tests/current/prefix-search/test_prefix.py',
+				levelId: 'prefix-search',
+				category: 'current',
+				status: 'failed',
+				failureKind: 'learner_error',
+				message: 'ZeroDivisionError: division by zero',
+				traceback: 'search_engine.py:12: in search_prefix\n    return 1 / 0\nE   ZeroDivisionError: division by zero',
+				sourcePath: 'search_engine.py',
+				sourceLine: 12,
+				stdout: 'dividing <2> by 0\n',
+			}],
+			testCases: [{
+				name: 'test_prefix',
+				testPath: '.codearc/tests/current/prefix-search/test_prefix.py',
+				levelId: 'prefix-search',
+				category: 'current',
+				status: 'failed',
+				failureKind: 'learner_error',
+				message: 'ZeroDivisionError: division by zero',
+				traceback: 'search_engine.py:12: in search_prefix\n    return 1 / 0\nE   ZeroDivisionError: division by zero',
+				sourcePath: 'search_engine.py',
+				sourceLine: 12,
+				stdout: 'dividing <2> by 0\n',
+			}],
+			exitCode: 1,
+			timedOut: false,
+			runnerVersion: 'pytest 9.0.0',
+			codeHash: '1234567890abcdef',
+			durationMilliseconds: 125,
+		};
+
+		const html = await renderChallenge(
+			markdownRenderer,
+			createCatalogSnapshot(),
+			undefined,
+			snapshot,
+		);
+
+		assert.match(html, /Some tests need attention/);
+		assert.match(html, /Your code raised an unexpected error while this test ran/);
+		assert.match(html, /ZeroDivisionError: division by zero/);
+		assert.match(html, /<span>Output<\/span><code>dividing &lt;2&gt; by 0\n<\/code>/);
+		assert.match(html, /data-action="openLearnerSource"/);
+		assert.match(html, /data-source-path="search_engine.py"/);
+		assert.match(html, /data-source-line="12"/);
+		assert.match(html, /Open your code/);
+		assert.match(html, /Open test case/);
+		assert.match(html, /<summary>Details<\/summary>/);
+		assert.match(html, /search_engine\.py:12: in search_prefix/);
+	});
+
+	test('identifies the test that was running when pytest timed out', async () => {
+		const snapshot = createAttemptSessionSnapshot();
+		snapshot.selectedSection = ChallengeSection.Results;
+		snapshot.testStatus = 'failed';
+		const timedOutTest = {
+			name: 'test_divides_2',
+			testFunctionName: 'test_divides_2',
+			testPath: '.codearc/tests/current/phrase-search/test_phrase.py',
+			levelId: 'phrase-search',
+			category: 'current' as const,
+			status: 'failed' as const,
+			failureKind: 'timed_out' as const,
+			message: 'This test did not finish before CodeArc’s time limit.',
+		};
+		snapshot.latestTestEvidence = {
+			outcome: 'timed_out',
+			passedCount: 7,
+			failedCount: 1,
+			totalCount: 8,
+			failures: [timedOutTest],
+			testCases: [timedOutTest],
+			exitCode: null,
+			timedOut: true,
+			runnerVersion: 'pytest 9.1.1',
+			codeHash: '1234567890abcdef',
+			durationMilliseconds: 30_000,
+		};
+
+		const html = await renderChallenge(
+			markdownRenderer,
+			createCatalogSnapshot(),
+			undefined,
+			snapshot,
+		);
+
+		assert.match(html, /Divides 2/);
+		assert.match(
+			html,
+			/This test was still running when CodeArc’s time limit expired\./,
+		);
+		assert.match(html, /This test did not finish before CodeArc’s time limit\./);
+		assert.match(html, /data-test-name="test_divides_2"/);
+		assert.doesNotMatch(html, /pytest did not finish before the time limit/);
 	});
 
 	test('reveals backend design feedback for a completed level', async () => {
@@ -227,7 +400,7 @@ suite('Challenge view rendering', () => {
 
 function passingTestEvidence() {
 	return {
-		passed: true,
+		outcome: 'passed' as const,
 		passedCount: 1,
 		failedCount: 0,
 		totalCount: 1,
