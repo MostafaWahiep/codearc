@@ -131,6 +131,31 @@ suite('AttemptSession', () => {
 		});
 	});
 
+	test('returns independent test comparison snapshots', () => {
+		const session = new AttemptSession(createBackendClient());
+		session.open(challengeSummary(), openedAttempt());
+		session.completeTestRun(testEvidence({
+			failures: [{
+				name: 'test_prefix',
+				levelId: 'prefix-search',
+				category: 'current',
+				status: 'failed',
+				comparison: { received: '[]', expected: "['doc-1']" },
+			}],
+		}));
+
+		const first = session.getSnapshot();
+		if (!first?.latestTestEvidence?.failures[0].comparison) {
+			assert.fail('Expected comparison evidence.');
+		}
+		first.latestTestEvidence.failures[0].comparison.received = 'changed';
+
+		assert.strictEqual(
+			session.getSnapshot()?.latestTestEvidence?.failures[0].comparison?.received,
+			'[]',
+		);
+	});
+
 	test('submits mapped evidence and replaces the attempt with backend state', async () => {
 		let request: { attemptId: string; submission: TestSubmission } | undefined;
 		const loadedLevels: string[] = [];

@@ -248,8 +248,8 @@ export class AttemptSession {
 				latestTestEvidence: this.snapshot.latestTestEvidence
 					? {
 						...this.snapshot.latestTestEvidence,
-						failures: this.snapshot.latestTestEvidence.failures.map((failure) => ({ ...failure })),
-						testCases: this.snapshot.latestTestEvidence.testCases.map((testCase) => ({ ...testCase })),
+						failures: this.snapshot.latestTestEvidence.failures.map(cloneTestCase),
+						testCases: this.snapshot.latestTestEvidence.testCases.map(cloneTestCase),
 					}
 					: undefined,
 			}
@@ -283,4 +283,11 @@ export class AttemptSession {
 			throw new Error('Choose a level already visible in this attempt.');
 		}
 	}
+}
+
+function cloneTestCase<T extends TestEvidence['testCases'][number]>(testCase: T): T {
+	return {
+		...testCase,
+		comparison: testCase.comparison ? { ...testCase.comparison } : undefined,
+	};
 }
