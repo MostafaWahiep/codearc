@@ -10,6 +10,8 @@ import type { OpenedAttempt } from './AttemptCatalog';
 import type { TestEvidence } from './LocalTestRunner';
 import { ChallengeSection } from './ChallengeSection';
 
+const TIMEOUT_EXIT_CODE = 124;
+
 export type AttemptTestStatus = 'idle' | 'running' | 'passed' | 'failed';
 export type AttemptSubmissionStatus =
 	| 'idle'
@@ -217,13 +219,13 @@ export class AttemptSession {
 			throw new Error('No test evidence available to create a submission.');
 		}
 
-		if (evidence.exitCode === null) {
+		if (evidence.exitCode === null && !evidence.timedOut) {
 			throw new Error('Test evidence must include an exit code.');
 		}
 
 		return {
 			levelId: current.attempt.activeLevelId,
-			exitCode: evidence.exitCode,
+			exitCode: evidence.exitCode ?? TIMEOUT_EXIT_CODE,
 			timedOut: evidence.timedOut,
 			passedCount: evidence.passedCount,
 			failedCount: evidence.failedCount,

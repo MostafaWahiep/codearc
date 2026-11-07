@@ -111,6 +111,26 @@ suite('AttemptSession', () => {
 		);
 	});
 
+	test('maps a timed-out run to a non-zero backend exit code', () => {
+		const session = new AttemptSession(createBackendClient());
+		session.open(challengeSummary(), openedAttempt());
+		session.completeTestRun(testEvidence({
+			outcome: 'timed_out',
+			exitCode: null,
+			timedOut: true,
+			passedCount: 1,
+			failedCount: 1,
+		}));
+
+		assert.deepStrictEqual(session.createTestSubmission(), {
+			levelId: 'prefix-search',
+			exitCode: 124,
+			timedOut: true,
+			passedCount: 1,
+			failedCount: 1,
+		});
+	});
+
 	test('submits mapped evidence and replaces the attempt with backend state', async () => {
 		let request: { attemptId: string; submission: TestSubmission } | undefined;
 		const loadedLevels: string[] = [];
