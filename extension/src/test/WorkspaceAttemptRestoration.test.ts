@@ -37,7 +37,6 @@ suite('Workspace attempt restoration', () => {
 		await seedWorkspace.createWorkspace(attempt());
 		const challengeRoot = path.join(
 			storagePath,
-			'learner-workspaces',
 			attemptId,
 			'search-engine',
 		);

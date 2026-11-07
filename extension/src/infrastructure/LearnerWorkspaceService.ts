@@ -1,7 +1,21 @@
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { AttemptDto } from '../backend/BackendTypes';
 import { BackendClient } from '../backend/BackendClient';
+
+const CODEARC_DIRECTORY = 'CodeArc';
+const ATTEMPTS_DIRECTORY = 'attempts';
+
+export function defaultLearnerWorkspacesRoot(
+	homeDirectory: string = os.homedir(),
+): vscode.Uri {
+	return vscode.Uri.file(path.join(
+		homeDirectory,
+		CODEARC_DIRECTORY,
+		ATTEMPTS_DIRECTORY,
+	));
+}
 
 export interface WorkspaceEntry {
 	attemptId: string;
@@ -21,7 +35,7 @@ export class LearnerWorkspaceService {
 	private readonly attemptMetadataFileName = 'attempt.json';
 
 	public constructor(
-		private readonly storageRoot: vscode.Uri,
+		private readonly workspacesRoot: vscode.Uri,
 		private readonly backendClient: BackendClient,
 		private readonly getWorkspaceFolders: () => readonly vscode.WorkspaceFolder[] | undefined = (
 			() => vscode.workspace.workspaceFolders
@@ -48,7 +62,7 @@ export class LearnerWorkspaceService {
 		}
 
 		const challengeRoot = workspaceFolders[0].uri;
-		const workspacesRoot = this.getWorkspacesRoot();
+		const workspacesRoot = this.workspacesRoot;
 		if (
 			challengeRoot.scheme !== workspacesRoot.scheme
 			|| challengeRoot.authority !== workspacesRoot.authority
@@ -107,7 +121,7 @@ export class LearnerWorkspaceService {
 			return this.workspace;
 		}
 
-		const workspacesRoot = this.getWorkspacesRoot();
+		const workspacesRoot = this.workspacesRoot;
 		const attemptRoot = vscode.Uri.joinPath(workspacesRoot, attempt.id);
 		const challengeRoot = vscode.Uri.joinPath(attemptRoot, attempt.challengeId);
 
@@ -192,7 +206,7 @@ export class LearnerWorkspaceService {
 	public async createWorkspace(
 		attempt: AttemptDto,
 	): Promise<void> {
-		const workspacesRoot = this.getWorkspacesRoot();
+		const workspacesRoot = this.workspacesRoot;
 		const attemptRoot = vscode.Uri.joinPath(workspacesRoot, attempt.id);
 		const challengeRoot = vscode.Uri.joinPath(attemptRoot, attempt.challengeId);
 
@@ -372,10 +386,6 @@ export class LearnerWorkspaceService {
 		return value;
 	}
 
-	private getWorkspacesRoot(): vscode.Uri {
-		const localStorageRoot = vscode.Uri.file(this.storageRoot.fsPath);
-		return vscode.Uri.joinPath(localStorageRoot, 'learner-workspaces');
-	}
 }
 
 interface AttemptWorkspaceMetadata {

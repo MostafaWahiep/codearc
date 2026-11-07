@@ -9,6 +9,7 @@ import type {
 	StarterFilesDto,
 } from '../backend/BackendTypes';
 import {
+	defaultLearnerWorkspacesRoot,
 	LearnerWorkspaceService,
 	type OpenFolderOptions,
 } from '../infrastructure/LearnerWorkspaceService';
@@ -24,6 +25,15 @@ suite('LearnerWorkspaceService', () => {
 
 	teardown(async () => {
 		await fs.rm(storagePath, { recursive: true, force: true });
+	});
+
+	test('places learner attempts in a visible CodeArc home directory', () => {
+		const homeDirectory = path.join(path.sep, 'Users', 'learner');
+
+		assert.strictEqual(
+			defaultLearnerWorkspacesRoot(homeDirectory).fsPath,
+			path.join(homeDirectory, 'CodeArc', 'attempts'),
+		);
 	});
 
 	test('creates versioned starter files and attempt metadata', async () => {
@@ -104,7 +114,7 @@ suite('LearnerWorkspaceService', () => {
 
 		assert.strictEqual(await exists(expectedAttemptRoot(storagePath)), false);
 		assert.strictEqual(
-			await exists(path.join(storagePath, 'learner-workspaces', 'outside.py')),
+			await exists(path.join(storagePath, 'outside.py')),
 			false,
 		);
 	});
@@ -276,30 +286,6 @@ suite('LearnerWorkspaceService', () => {
 			undefined,
 			undefined,
 			openFolderCalls,
-		);
-
-		await service.openWorkspace(attempt());
-
-		assertOpenFolderCall(
-			openFolderCalls,
-			storagePath,
-			{ forceReuseWindow: true },
-		);
-	});
-
-	test('opens a file URI when extension storage uses vscode-userdata', async () => {
-		const openFolderCalls: OpenFolderCall[] = [];
-		const service = new LearnerWorkspaceService(
-			vscode.Uri.from({
-				scheme: 'vscode-userdata',
-				path: storagePath,
-			}),
-			createBackendClient(async () => starterFiles()),
-			() => undefined,
-			() => undefined,
-			async (folder, options) => {
-				openFolderCalls.push({ folder, options });
-			},
 		);
 
 		await service.openWorkspace(attempt());
@@ -490,7 +476,7 @@ function createBackendClient(
 }
 
 function expectedAttemptRoot(storagePath: string): string {
-	return path.join(storagePath, 'learner-workspaces', attemptId);
+	return path.join(storagePath, attemptId);
 }
 
 function workspaceFolder(folderPath: string): vscode.WorkspaceFolder {

@@ -3,7 +3,10 @@ import { AttemptCatalog } from './application/AttemptCatalog';
 import { AttemptSession } from './application/AttemptSession';
 import { ChallengeCatalog } from './application/ChallengeCatalog';
 import { HttpBackendClient } from './backend/HttpBackendClient';
-import { LearnerWorkspaceService } from './infrastructure/LearnerWorkspaceService';
+import {
+	defaultLearnerWorkspacesRoot,
+	LearnerWorkspaceService,
+} from './infrastructure/LearnerWorkspaceService';
 import { PytestRunner } from './infrastructure/PytestRunner';
 import { PythonRuntimeManager } from './infrastructure/PythonRuntimeManager';
 import { VsCodeMarkdownRenderer } from './infrastructure/VsCodeMarkdownRenderer';
@@ -21,7 +24,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const attemptCatalog = new AttemptCatalog(backendClient, prototypeUserId);
 	const attemptSession = new AttemptSession(backendClient);
 	const learnerWorkspace = new LearnerWorkspaceService(
-		context.globalStorageUri,
+		defaultLearnerWorkspacesRoot(),
 		backendClient,
 	);
 	const pythonRuntime = createPythonRuntime(context);
