@@ -369,6 +369,37 @@ suite('LearnerWorkspaceService', () => {
 			path.join(challengeRoot, 'search_engine.py'),
 		);
 	});
+
+	test('opens learner source at the line reported by pytest', async () => {
+		const service = new LearnerWorkspaceService(
+			vscode.Uri.file(storagePath),
+			createBackendClient(async () => starterFiles()),
+		);
+
+		await service.openLearnerSource(attempt(), 'search_engine.py', 2);
+
+		assert.strictEqual(
+			vscode.window.activeTextEditor?.document.uri.fsPath,
+			path.join(expectedAttemptRoot(storagePath), 'search-engine', 'search_engine.py'),
+		);
+		assert.strictEqual(vscode.window.activeTextEditor?.selection.active.line, 1);
+	});
+
+	test('rejects CodeArc test files as learner source', async () => {
+		const service = new LearnerWorkspaceService(
+			vscode.Uri.file(storagePath),
+			createBackendClient(async () => starterFiles()),
+		);
+
+		await assert.rejects(
+			service.openLearnerSource(
+				attempt(),
+				'.codearc/tests/current/test_search.py',
+				1,
+			),
+			/cannot point to CodeArc files/,
+		);
+	});
 });
 
 interface OpenFolderCall {

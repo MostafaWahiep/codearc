@@ -291,6 +291,39 @@ export class LearnerWorkspaceService {
 		});
 	}
 
+	public async openLearnerSource(
+		attempt: AttemptDto,
+		sourcePath: string,
+		sourceLine: number,
+	): Promise<void> {
+		const relativePath = normalizeRelativePath(sourcePath, 'learner source');
+		if (relativePath === '.') {
+			throw new Error('The learner source path returned by the runner is invalid.');
+		}
+		if (relativePath === '.codearc' || relativePath.startsWith('.codearc/')) {
+			throw new Error('The learner source path cannot point to CodeArc files.');
+		}
+		if (!Number.isInteger(sourceLine) || sourceLine < 1) {
+			throw new Error('The learner source line returned by the runner is invalid.');
+		}
+
+		const workspace = await this.ensureWorkspace(attempt);
+		const sourceFile = vscode.Uri.joinPath(
+			workspace.challengeRootUri,
+			...relativePath.split('/'),
+		);
+		if (!(await uriExists(sourceFile))) {
+			throw new Error('The learner source file reported by pytest is missing.');
+		}
+
+		const document = await vscode.workspace.openTextDocument(sourceFile);
+		const line = Math.min(sourceLine - 1, Math.max(document.lineCount - 1, 0));
+		await vscode.window.showTextDocument(document, {
+			preview: false,
+			selection: document.lineAt(line).range,
+		});
+	}
+
 	private async writeAttemptMetadata(
 		attempt: AttemptDto,
 		entrypoint: string,

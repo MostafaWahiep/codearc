@@ -73,7 +73,8 @@ document.addEventListener('click', (event) => {
 	}
 
 	if (type !== '${ChallengeViewAction.SelectSection}'
-		&& type !== '${ChallengeViewAction.OpenTestCase}') {
+		&& type !== '${ChallengeViewAction.OpenTestCase}'
+		&& type !== '${ChallengeViewAction.OpenLearnerSource}') {
 		button.disabled = true;
 	}
 
@@ -85,6 +86,10 @@ document.addEventListener('click', (event) => {
 		levelId: button.dataset.levelId,
 		testPath: button.dataset.testPath,
 		testName: button.dataset.testName,
+		sourcePath: button.dataset.sourcePath,
+		sourceLine: button.dataset.sourceLine
+			? Number(button.dataset.sourceLine)
+			: undefined,
 	});
 });
 

@@ -158,6 +158,9 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 				case ChallengeViewAction.OpenTestCase:
 					await this.openTestCase(message.testPath, message.testName);
 					return;
+				case ChallengeViewAction.OpenLearnerSource:
+					await this.openLearnerSource(message.sourcePath, message.sourceLine);
+					return;
 				case ChallengeViewAction.SubmitSolution:
 					await this.submitSolution();
 					return;
@@ -271,6 +274,17 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 		);
 	}
 
+	private async openLearnerSource(sourcePath: string, sourceLine: number): Promise<void> {
+		if (!this.attemptSessionSnapshot) {
+			throw new Error('Open an attempt before viewing learner code.');
+		}
+		await this.learnerWorkspace.openLearnerSource(
+			this.attemptSessionSnapshot.attempt,
+			sourcePath,
+			sourceLine,
+		);
+	}
+
 	private async loadChallengeCatalog(force = false): Promise<void> {
 		if (!force && this.catalogSnapshot.status === ChallengeCatalogStatus.Ready) {
 			return;
@@ -356,6 +370,7 @@ type ViewMessage =
 	| { type: ChallengeViewAction.ContinueAttempt; attemptId: string }
 	| { type: ChallengeViewAction.SelectAttemptLevel; levelId: string }
 	| { type: ChallengeViewAction.OpenTestCase; testPath: string; testName: string }
+	| { type: ChallengeViewAction.OpenLearnerSource; sourcePath: string; sourceLine: number }
 	| {
 		type:
 			| ChallengeViewAction.RetryCatalog
@@ -400,6 +415,15 @@ function isViewMessage(value: unknown): value is ViewMessage {
 			&& 'testName' in value
 			&& typeof value.testName === 'string'
 			&& value.testName.length > 0;
+	}
+	if (value.type === ChallengeViewAction.OpenLearnerSource) {
+		return 'sourcePath' in value
+			&& typeof value.sourcePath === 'string'
+			&& value.sourcePath.length > 0
+			&& 'sourceLine' in value
+			&& typeof value.sourceLine === 'number'
+			&& Number.isInteger(value.sourceLine)
+			&& value.sourceLine > 0;
 	}
 
 	return typeof value.type === 'string'
