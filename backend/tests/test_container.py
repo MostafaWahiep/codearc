@@ -14,8 +14,12 @@ from app.infrastructure.sqlalchemy_attempt_repository import (
 from app.infrastructure.sqlalchemy_submission_repository import (
     SQLAlchemySubmissionRepository,
 )
+from app.infrastructure.sqlalchemy_transaction_manager import (
+    SQLAlchemyTransactionManager,
+)
 from app.services.attempt_service import AttemptService
 from app.services.challenge_service import ChallengeService
+from app.services.submission_service import SubmissionService
 from app.validation.manifest_validator import ManifestValidator
 
 
@@ -74,6 +78,15 @@ class ContainerTests(unittest.TestCase):
         self.assertIsInstance(first, LocalSubmissionSnapshotStore)
         self.assertIs(first, second)
 
+    def test_resolves_transaction_manager_as_singleton(self) -> None:
+        app = create_app()
+
+        first = app.container.transaction_manager()
+        second = app.container.transaction_manager()
+
+        self.assertIsInstance(first, SQLAlchemyTransactionManager)
+        self.assertIs(first, second)
+
     def test_resolves_attempt_service_with_runtime_dependencies(self) -> None:
         app = create_app()
 
@@ -84,10 +97,36 @@ class ContainerTests(unittest.TestCase):
         self.assertIsNot(first, second)
         self.assertIs(first._attempt_repository, app.container.attempt_repository())
         self.assertIs(first._challenge_repository, app.container.challenge_repository())
+        self.assertIs(
+            first._transaction_manager,
+            app.container.transaction_manager(),
+        )
         self.assertIs(first._clock, utc_now)
         self.assertIs(first._id_factory, new_uuid)
         self.assertIs(first._clock().tzinfo, timezone.utc)
         self.assertIsInstance(first._id_factory(), UUID)
+
+    def test_resolves_submission_service_with_dependencies(self) -> None:
+        app = create_app()
+
+        first = app.container.submission_service()
+        second = app.container.submission_service()
+
+        self.assertIsInstance(first, SubmissionService)
+        self.assertIsNot(first, second)
+        self.assertIs(first._attempt_repository, app.container.attempt_repository())
+        self.assertIs(
+            first._submission_repository,
+            app.container.submission_repository(),
+        )
+        self.assertIs(
+            first._snapshot_store,
+            app.container.submission_snapshot_store(),
+        )
+        self.assertIs(
+            first._transaction_manager,
+            app.container.transaction_manager(),
+        )
 
 
 if __name__ == "__main__":

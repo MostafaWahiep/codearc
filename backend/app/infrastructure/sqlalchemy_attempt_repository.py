@@ -22,7 +22,7 @@ class SQLAlchemyAttemptRepository(AttemptRepository):
     def add(self, attempt: Attempt) -> Attempt:
         model = self._map_attempt_to_model(attempt)
         self._db.session.add(model)
-        self._commit()
+        self._db.session.flush()
         return self._map_model_to_domain(model)
 
     def update(self, attempt: Attempt) -> Attempt:
@@ -35,13 +35,22 @@ class SQLAlchemyAttemptRepository(AttemptRepository):
         model.active_level_id = attempt.active_level_id
         model.updated_at = attempt.updated_at
         model.completed_at = attempt.completed_at
+        model.submission_count = attempt.submission_count
         self._synchronize_level_progress(model, attempt.levels)
 
-        self._commit()
+        self._db.session.flush()
         return self._map_model_to_domain(model)
 
     def get_by_id(self, attempt_id: UUID) -> Attempt | None:
         model = self._db.session.get(AttemptModel, attempt_id)
+        return self._map_model_to_domain(model) if model is not None else None
+
+    def get_by_id_for_update(self, attempt_id: UUID) -> Attempt | None:
+        model = self._db.session.scalar(
+            select(AttemptModel)
+            .where(AttemptModel.id == attempt_id)
+            .with_for_update(),
+        )
         return self._map_model_to_domain(model) if model is not None else None
 
     def find_by_user_and_challenge(
@@ -79,13 +88,6 @@ class SQLAlchemyAttemptRepository(AttemptRepository):
             progress_model.submission_count = entry.submission_count
             progress_model.completed_at = entry.completed_at
 
-    def _commit(self) -> None:
-        try:
-            self._db.session.commit()
-        except Exception:
-            self._db.session.rollback()
-            raise
-
     @staticmethod
     def _map_attempt_to_model(attempt: Attempt) -> AttemptModel:
         return AttemptModel(
@@ -98,6 +100,7 @@ class SQLAlchemyAttemptRepository(AttemptRepository):
             started_at=attempt.started_at,
             updated_at=attempt.updated_at,
             completed_at=attempt.completed_at,
+            submission_count=attempt.submission_count,
             levels=[
                 SQLAlchemyAttemptRepository._map_level_progress_to_model(progress)
                 for progress in attempt.levels
@@ -131,6 +134,7 @@ class SQLAlchemyAttemptRepository(AttemptRepository):
                 else None
             ),
             active_level_id=model.active_level_id,
+            submission_count=model.submission_count,
             levels=tuple(
                 SQLAlchemyAttemptRepository._map_level_progress_model_to_domain(
                     progress,

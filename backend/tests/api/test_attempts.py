@@ -29,6 +29,7 @@ def make_attempt() -> Attempt:
         updated_at=STARTED_AT,
         completed_at=None,
         active_level_id="single-term-search",
+        submission_count=0,
         levels=(
             LevelProgress(
                 level_id="single-term-search",

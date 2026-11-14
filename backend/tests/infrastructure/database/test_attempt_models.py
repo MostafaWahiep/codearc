@@ -46,6 +46,7 @@ class AttemptModelTests(unittest.TestCase):
 
         self.assertIsNotNone(loaded)
         self.assertEqual(loaded.status, AttemptStatus.IN_PROGRESS)
+        self.assertEqual(loaded.submission_count, 0)
         self.assertEqual(loaded.levels[0].status, LevelProgressStatus.ACTIVE)
         self.assertEqual(loaded.levels[0].submission_count, 0)
         self.assertEqual(loaded.levels[0].attempt_id, loaded.id)
@@ -85,6 +86,7 @@ class AttemptModelTests(unittest.TestCase):
                 "started_at",
                 "updated_at",
                 "completed_at",
+                "submission_count",
             },
         )
         self.assertFalse(attempt_columns["id"]["nullable"])
@@ -92,6 +94,7 @@ class AttemptModelTests(unittest.TestCase):
         self.assertFalse(attempt_columns["challenge_id"]["nullable"])
         self.assertFalse(attempt_columns["active_level_id"]["nullable"])
         self.assertTrue(attempt_columns["completed_at"]["nullable"])
+        self.assertFalse(attempt_columns["submission_count"]["nullable"])
         self.assertEqual(
             inspector.get_pk_constraint("attempts")["constrained_columns"],
             ["id"],
@@ -104,6 +107,10 @@ class AttemptModelTests(unittest.TestCase):
         self.assertEqual(
             attempt_checks["attempt_status"],
             "status IN ('in_progress', 'completed')",
+        )
+        self.assertEqual(
+            attempt_checks["ck_attempts_submission_count_nonnegative"],
+            "submission_count >= 0",
         )
 
         attempt_indexes = {

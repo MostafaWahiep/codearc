@@ -46,6 +46,14 @@ class SQLAlchemyAttemptRepositoryTests(unittest.TestCase):
     def test_get_by_id_returns_none_for_unknown_attempt(self) -> None:
         self.assertIsNone(self.repository.get_by_id(uuid4()))
 
+    def test_get_by_id_for_update_returns_attempt(self) -> None:
+        attempt = self._attempt()
+        self.repository.add(attempt)
+
+        result = self.repository.get_by_id_for_update(attempt.id)
+
+        self.assertEqual(result, attempt)
+
     def test_finds_matching_attempts_newest_first(self) -> None:
         user_id = uuid4()
         older = self._attempt(user_id=user_id)
@@ -81,6 +89,7 @@ class SQLAlchemyAttemptRepositoryTests(unittest.TestCase):
             original,
             active_level_id="prefix-search",
             updated_at=completion_time,
+            submission_count=2,
             levels=(
                 replace(
                     original.levels[0],
@@ -100,6 +109,7 @@ class SQLAlchemyAttemptRepositoryTests(unittest.TestCase):
         result = self.repository.update(updated)
 
         self.assertEqual(result, updated)
+        self.assertEqual(result.submission_count, 2)
         progress_models = db.session.scalars(
             db.select(LevelProgressModel).where(
                 LevelProgressModel.attempt_id == original.id,
@@ -147,6 +157,7 @@ class SQLAlchemyAttemptRepositoryTests(unittest.TestCase):
             updated_at=start,
             completed_at=None,
             active_level_id="single-term-search",
+            submission_count=0,
             levels=(
                 LevelProgress(
                     level_id="single-term-search",

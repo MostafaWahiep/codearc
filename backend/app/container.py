@@ -10,8 +10,12 @@ from app.infrastructure.sqlalchemy_attempt_repository import SQLAlchemyAttemptRe
 from app.infrastructure.sqlalchemy_submission_repository import (
     SQLAlchemySubmissionRepository,
 )
+from app.infrastructure.sqlalchemy_transaction_manager import (
+    SQLAlchemyTransactionManager,
+)
 from app.services.attempt_service import AttemptService
 from app.services.challenge_service import ChallengeService
+from app.services.submission_service import SubmissionService
 from app.validation.manifest_validator import ManifestValidator
 
 
@@ -28,6 +32,11 @@ class Container(containers.DeclarativeContainer):
     database = providers.Object(db)
     clock = providers.Object(utc_now)
     id_factory = providers.Object(new_uuid)
+
+    transaction_manager = providers.Singleton(
+        SQLAlchemyTransactionManager,
+        db=database,
+    )
 
     manifest_validator = providers.Singleton(
         ManifestValidator,
@@ -64,6 +73,17 @@ class Container(containers.DeclarativeContainer):
         AttemptService,
         attempt_repository=attempt_repository,
         challenge_repository=challenge_repository,
+        transaction_manager=transaction_manager,
+        clock=clock,
+        id_factory=id_factory,
+    )
+
+    submission_service = providers.Factory(
+        SubmissionService,
+        attempt_repository=attempt_repository,
+        submission_repository=submission_repository,
+        snapshot_store=submission_snapshot_store,
+        transaction_manager=transaction_manager,
         clock=clock,
         id_factory=id_factory,
     )

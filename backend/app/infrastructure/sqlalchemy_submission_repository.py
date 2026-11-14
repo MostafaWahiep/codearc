@@ -19,7 +19,7 @@ class SQLAlchemySubmissionRepository(SubmissionRepository):
     def add(self, submission: Submission) -> Submission:
         model = self._map_submission_to_model(submission)
         self._db.session.add(model)
-        self._commit()
+        self._db.session.flush()
         return self._map_model_to_domain(model)
 
     def update(self, submission: Submission) -> Submission:
@@ -30,7 +30,7 @@ class SQLAlchemySubmissionRepository(SubmissionRepository):
         model.status = submission.status
         model.started_at = submission.started_at
         model.completed_at = submission.completed_at
-        self._commit()
+        self._db.session.flush()
         return self._map_model_to_domain(model)
 
     def get_by_id(self, submission_id: UUID) -> Submission | None:
@@ -44,13 +44,6 @@ class SQLAlchemySubmissionRepository(SubmissionRepository):
             .order_by(SubmissionModel.sequence_number.asc()),
         ).all()
         return [self._map_model_to_domain(model) for model in models]
-
-    def _commit(self) -> None:
-        try:
-            self._db.session.commit()
-        except Exception:
-            self._db.session.rollback()
-            raise
 
     @staticmethod
     def _map_submission_to_model(submission: Submission) -> SubmissionModel:

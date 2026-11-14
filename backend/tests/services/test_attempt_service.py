@@ -1,4 +1,5 @@
 import unittest
+from contextlib import nullcontext
 from dataclasses import replace
 from datetime import datetime, timezone
 from unittest.mock import Mock
@@ -19,6 +20,7 @@ from app.domain.test_submission import (
 )
 from app.repositories.attempt_repository import AttemptNotFound, AttemptRepository
 from app.repositories.challenge_repository import ChallengeRepository
+from app.repositories.transaction_manager import TransactionManager
 from app.services.attempt_service import (
     AttemptLevelNotActive,
     AttemptLevelNotVisible,
@@ -31,11 +33,14 @@ class AttemptServiceTests(unittest.TestCase):
         self.attempt_repository = Mock(spec=AttemptRepository)
         self.attempt_repository.update.side_effect = lambda attempt: attempt
         self.challenge_repository = Mock(spec=ChallengeRepository)
+        self.transaction_manager = Mock(spec=TransactionManager)
+        self.transaction_manager.transaction.side_effect = nullcontext
         self.now = datetime(2026, 10, 13, 12, tzinfo=timezone.utc)
         self.attempt_id = uuid4()
         self.service = AttemptService(
             attempt_repository=self.attempt_repository,
             challenge_repository=self.challenge_repository,
+            transaction_manager=self.transaction_manager,
             clock=lambda: self.now,
             id_factory=lambda: self.attempt_id,
         )

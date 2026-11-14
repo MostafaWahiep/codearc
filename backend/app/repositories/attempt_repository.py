@@ -20,6 +20,9 @@ class AttemptRepository(Protocol):
     def get_by_id(self, attempt_id: UUID) -> Attempt | None:
         ...
 
+    def get_by_id_for_update(self, attempt_id: UUID) -> Attempt | None:
+        ...
+
     def find_by_user_and_challenge(
         self,
         user_id: UUID,

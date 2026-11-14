@@ -7,6 +7,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    Integer,
     String,
     UniqueConstraint,
 )
@@ -25,6 +26,10 @@ class AttemptModel(db.Model):
             "ix_attempts_user_challenge",
             "user_id",
             "challenge_id",
+        ),
+        CheckConstraint(
+            "submission_count >= 0",
+            name="ck_attempts_submission_count_nonnegative",
         ),
     )
 
@@ -57,6 +62,7 @@ class AttemptModel(db.Model):
         DateTime(timezone=True),
         nullable=True,
     )
+    submission_count: Mapped[int] = mapped_column(Integer, default=0)
 
     levels: Mapped[list["LevelProgressModel"]] = relationship(
         back_populates="attempt",

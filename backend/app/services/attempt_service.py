@@ -14,6 +14,7 @@ from app.domain.test_submission import (
 )
 from app.repositories.attempt_repository import AttemptNotFound, AttemptRepository
 from app.repositories.challenge_repository import ChallengeRepository
+from app.repositories.transaction_manager import TransactionManager
 
 
 class AttemptLevelNotVisible(LookupError):
@@ -45,11 +46,13 @@ class AttemptService:
         self,
         attempt_repository: AttemptRepository,
         challenge_repository: ChallengeRepository,
+        transaction_manager: TransactionManager,
         clock: Callable[[], datetime],
         id_factory: Callable[[], UUID],
     ) -> None:
         self._attempt_repository = attempt_repository
         self._challenge_repository = challenge_repository
+        self._transaction_manager = transaction_manager
         self._clock = clock
         self._id_factory = id_factory
 
@@ -73,10 +76,12 @@ class AttemptService:
             updated_at=now,
             completed_at=None,
             active_level_id=first_level.id,
+            submission_count=0,
             levels=(level_progress,),
         )
 
-        return self._attempt_repository.add(attempt)
+        with self._transaction_manager.transaction():
+            return self._attempt_repository.add(attempt)
 
     def get_attempt(
         self,
@@ -139,6 +144,14 @@ class AttemptService:
         return tuple(files)
 
     def submit_test_results(
+        self,
+        attempt_id: UUID,
+        submission: TestSubmission,
+    ) -> TestSubmissionResult:
+        with self._transaction_manager.transaction():
+            return self._submit_test_results(attempt_id, submission)
+
+    def _submit_test_results(
         self,
         attempt_id: UUID,
         submission: TestSubmission,
