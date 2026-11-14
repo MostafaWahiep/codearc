@@ -7,6 +7,8 @@ import type {
 	TestSubmission,
 	TestSubmissionResultDto,
 	StarterFilesDto,
+	SubmissionDto,
+	SubmissionSourceFile,
 } from './BackendTypes';
 
 export interface BackendClient {
@@ -35,6 +37,11 @@ export interface BackendClient {
 		attemptId: string,
 		testSubmission: TestSubmission,
 	): Promise<TestSubmissionResultDto>;
+
+	createSubmission(
+		attemptId: string,
+		files: SubmissionSourceFile[],
+	): Promise<SubmissionDto>;
 
 	getStarterFiles(
 		challengeId: string,

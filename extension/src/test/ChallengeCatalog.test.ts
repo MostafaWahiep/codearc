@@ -63,6 +63,9 @@ function createBackendClient(): BackendClient {
 		submitTestResults: async () => {
 			throw new Error('Not implemented by this test fake.');
 		},
+		createSubmission: async () => {
+			throw new Error('Not implemented by this test fake.');
+		},
 		getStarterFiles: async () => {
 			throw new Error('Not implemented by this test fake.');
 		}

@@ -471,6 +471,7 @@ function createBackendClient(
 		getVisibleLevel: async () => { throw new Error('Not used'); },
 		getVisibleTests: async () => ({ runner: 'pytest', files: [] }),
 		submitTestResults: async () => { throw new Error('Not used'); },
+		createSubmission: async () => { throw new Error('Not used'); },
 		getStarterFiles,
 	};
 }

@@ -102,6 +102,9 @@ function createBackendClient(): BackendClient {
 		submitTestResults: async () => {
 			throw new Error('Not used');
 		},
+		createSubmission: async () => {
+			throw new Error('Not used');
+		},
 		getStarterFiles: async () => ({
 			challengeId: 'search-engine',
 			version: '1',

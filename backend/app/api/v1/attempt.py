@@ -7,15 +7,18 @@ from app.api.v1.exceptions import InvalidRequest
 from app.container import Container
 from app.domain.attempt import Attempt
 from app.domain.challenge_level import VisibleLevel
+from app.domain.submission import SourceFile, SourceSnapshot, Submission
 from app.domain.test_bundle import PublicTestFile
 from app.domain.test_submission import TestSubmission, TestSubmissionResult
 from app.repositories.attempt_repository import AttemptNotFound
 from app.repositories.challenge_repository import ChallengeNotFound
+from app.repositories.submission_snapshot_store import InvalidSnapshot
 from app.services.attempt_service import (
     AttemptLevelNotVisible,
     AttemptLevelNotActive,
     AttemptService,
 )
+from app.services.submission_service import SubmissionService
 
 
 attempt_bp = Blueprint("attempt", __name__, url_prefix="/attempts")
@@ -103,6 +106,25 @@ def _serialize_test_submission_result(result: TestSubmissionResult) -> dict:
     }
 
 
+def _serialize_submission(submission: Submission) -> dict:
+    return {
+        "id": submission.id,
+        "attemptId": submission.attempt_id,
+        "levelId": submission.level_id,
+        "sequenceNumber": submission.sequence_number,
+        "status": submission.status.value,
+        "createdAt": submission.created_at.isoformat(),
+        "startedAt": (
+            submission.started_at.isoformat() if submission.started_at else None
+        ),
+        "completedAt": (
+            submission.completed_at.isoformat()
+            if submission.completed_at
+            else None
+        ),
+    }
+
+
 def _parse_test_submission(body: object) -> TestSubmission:
     if not isinstance(body, dict):
         raise InvalidRequest("Request body must be a JSON object")
@@ -135,6 +157,33 @@ def _parse_test_submission(body: object) -> TestSubmission:
         passed_count=passed_count,
         failed_count=failed_count,
     )
+
+
+def _parse_source_snapshot(body: object) -> SourceSnapshot:
+    if not isinstance(body, dict):
+        raise InvalidRequest("Request body must be a JSON object")
+
+    files = body.get("files")
+    if not isinstance(files, list) or not files:
+        raise InvalidRequest("files must be a non-empty array")
+
+    source_files: list[SourceFile] = []
+    for index, value in enumerate(files):
+        if not isinstance(value, dict):
+            raise InvalidRequest(f"files[{index}] must be an object")
+
+        path = value.get("path")
+        content = value.get("content")
+        if not isinstance(path, str) or not path.strip():
+            raise InvalidRequest(
+                f"files[{index}].path must be a non-empty string",
+            )
+        if not isinstance(content, str):
+            raise InvalidRequest(f"files[{index}].content must be a string")
+
+        source_files.append(SourceFile(path=path, content=content))
+
+    return SourceSnapshot(files=tuple(source_files))
 
 
 @attempt_bp.get("/")
@@ -270,7 +319,7 @@ def get_visible_tests_in_attempt(
         }), 404
 
 
-@attempt_bp.post("/<uuid:attempt_id>/submissions")
+@attempt_bp.post("/<uuid:attempt_id>/test-results")
 @inject
 def submit_test_results(
     attempt_id: UUID,
@@ -301,3 +350,23 @@ def submit_test_results(
         return jsonify({
             "message": str(error),
         }), 409
+
+
+@attempt_bp.post("/<uuid:attempt_id>/submissions")
+@inject
+def create_submission(
+    attempt_id: UUID,
+    submission_service: SubmissionService = Provide[Container.submission_service],
+):
+    try:
+        snapshot = _parse_source_snapshot(request.get_json(silent=True))
+        submission = submission_service.create_submission(attempt_id, snapshot)
+        return jsonify(_serialize_submission(submission)), 201
+    except (InvalidRequest, InvalidSnapshot) as error:
+        return jsonify({
+            "message": str(error),
+        }), 400
+    except AttemptNotFound as error:
+        return jsonify({
+            "message": str(error),
+        }), 404

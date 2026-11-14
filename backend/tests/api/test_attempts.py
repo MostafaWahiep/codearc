@@ -7,14 +7,28 @@ from app import create_app
 from app.domain.attempt import Attempt, AttemptStatus, LevelProgress
 from app.domain.challenge_level import LevelProgressStatus, VisibleLevel
 from app.domain.level_section import LevelSection, SectionDisplay
+from app.domain.submission import (
+    SourceFile,
+    SourceSnapshot,
+    Submission,
+    SubmissionStatus,
+)
 from app.domain.test_bundle import PublicTestFile, TestCategory
+from app.domain.test_submission import (
+    TestSubmission,
+    TestSubmissionOutcome,
+    TestSubmissionResult,
+)
 from app.repositories.attempt_repository import AttemptNotFound
 from app.repositories.challenge_repository import ChallengeNotFound
+from app.repositories.submission_snapshot_store import InvalidSnapshot
 from app.services.attempt_service import AttemptLevelNotVisible, AttemptService
+from app.services.submission_service import SubmissionService
 
 
 USER_ID = UUID("11111111-1111-4111-8111-111111111111")
 ATTEMPT_ID = UUID("22222222-2222-4222-8222-222222222222")
+SUBMISSION_ID = UUID("33333333-3333-4333-8333-333333333333")
 STARTED_AT = datetime(2026, 10, 13, 12, 30, tzinfo=timezone.utc)
 
 
@@ -46,6 +60,7 @@ class AttemptEndpointTests(unittest.TestCase):
         self.app = create_app()
         self.client = self.app.test_client()
         self.service = Mock(spec=AttemptService)
+        self.submission_service = Mock(spec=SubmissionService)
 
     def test_starts_attempt_using_injected_service(self) -> None:
         self.service.start_attempt.return_value = make_attempt()
@@ -374,6 +389,162 @@ class AttemptEndpointTests(unittest.TestCase):
                     }
                 ],
             },
+        )
+
+    def test_submits_test_results_to_progression_endpoint(self) -> None:
+        attempt = make_attempt()
+        self.service.submit_test_results.return_value = TestSubmissionResult(
+            outcome=TestSubmissionOutcome.TESTS_FAILED,
+            attempt=attempt,
+            completed_level_id=None,
+        )
+
+        with self.app.container.attempt_service.override(self.service):
+            response = self.client.post(
+                f"/api/v1/attempts/{ATTEMPT_ID}/test-results",
+                json={
+                    "levelId": "single-term-search",
+                    "exitCode": 1,
+                    "timedOut": False,
+                    "passedCount": 4,
+                    "failedCount": 1,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["outcome"], "tests_failed")
+        self.service.submit_test_results.assert_called_once_with(
+            ATTEMPT_ID,
+            TestSubmission(
+                level_id="single-term-search",
+                exit_code=1,
+                timed_out=False,
+                passed_count=4,
+                failed_count=1,
+            ),
+        )
+
+    def test_creates_submission_from_source_files(self) -> None:
+        submission = Submission(
+            id=SUBMISSION_ID,
+            attempt_id=ATTEMPT_ID,
+            level_id="single-term-search",
+            sequence_number=2,
+            status=SubmissionStatus.RECEIVED,
+            created_at=STARTED_AT,
+            started_at=None,
+            completed_at=None,
+        )
+        self.submission_service.create_submission.return_value = submission
+
+        with self.app.container.submission_service.override(
+            self.submission_service,
+        ):
+            response = self.client.post(
+                f"/api/v1/attempts/{ATTEMPT_ID}/submissions",
+                json={
+                    "files": [
+                        {
+                            "path": "search_engine.py",
+                            "content": "class SearchEngine:\n    pass\n",
+                        },
+                    ],
+                },
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            response.get_json(),
+            {
+                "id": str(SUBMISSION_ID),
+                "attemptId": str(ATTEMPT_ID),
+                "levelId": "single-term-search",
+                "sequenceNumber": 2,
+                "status": "received",
+                "createdAt": "2026-10-13T12:30:00+00:00",
+                "startedAt": None,
+                "completedAt": None,
+            },
+        )
+        self.submission_service.create_submission.assert_called_once_with(
+            ATTEMPT_ID,
+            SourceSnapshot(
+                files=(
+                    SourceFile(
+                        path="search_engine.py",
+                        content="class SearchEngine:\n    pass\n",
+                    ),
+                ),
+            ),
+        )
+
+    def test_rejects_invalid_submission_source_body(self) -> None:
+        invalid_bodies = (
+            None,
+            {},
+            {"files": []},
+            {"files": ["search_engine.py"]},
+            {"files": [{"path": "", "content": "pass"}]},
+            {"files": [{"path": "search_engine.py", "content": 42}]},
+        )
+
+        with self.app.container.submission_service.override(
+            self.submission_service,
+        ):
+            for body in invalid_bodies:
+                with self.subTest(body=body):
+                    response = self.client.post(
+                        f"/api/v1/attempts/{ATTEMPT_ID}/submissions",
+                        json=body,
+                    )
+                    self.assertEqual(response.status_code, 400)
+
+        self.submission_service.create_submission.assert_not_called()
+
+    def test_rejects_unsafe_submission_source_path(self) -> None:
+        self.submission_service.create_submission.side_effect = InvalidSnapshot(
+            "Unsafe snapshot file path '../outside.py'",
+        )
+
+        with self.app.container.submission_service.override(
+            self.submission_service,
+        ):
+            response = self.client.post(
+                f"/api/v1/attempts/{ATTEMPT_ID}/submissions",
+                json={
+                    "files": [
+                        {"path": "../outside.py", "content": "pass\n"},
+                    ],
+                },
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json(),
+            {"message": "Unsafe snapshot file path '../outside.py'"},
+        )
+
+    def test_returns_not_found_when_submission_attempt_is_unknown(self) -> None:
+        self.submission_service.create_submission.side_effect = AttemptNotFound(
+            ATTEMPT_ID,
+        )
+
+        with self.app.container.submission_service.override(
+            self.submission_service,
+        ):
+            response = self.client.post(
+                f"/api/v1/attempts/{ATTEMPT_ID}/submissions",
+                json={
+                    "files": [
+                        {"path": "search_engine.py", "content": "pass\n"},
+                    ],
+                },
+            )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(
+            response.get_json(),
+            {"message": f"Attempt '{ATTEMPT_ID}' was not found"},
         )
 
 if __name__ == "__main__":

@@ -87,6 +87,29 @@ export interface TestSubmissionResultDto {
 	completedLevelId: string | null;
 }
 
+export interface SubmissionSourceFile {
+	path: string;
+	content: string;
+}
+
+export type SubmissionStatus =
+	| 'received'
+	| 'running'
+	| 'passed'
+	| 'failed'
+	| 'error';
+
+export interface SubmissionDto {
+	id: string;
+	attemptId: string;
+	levelId: string;
+	sequenceNumber: number;
+	status: SubmissionStatus;
+	createdAt: string;
+	startedAt: string | null;
+	completedAt: string | null;
+}
+
 export interface StarterFileDto {
 	filePath: string;
 	content: string;

@@ -219,7 +219,7 @@ suite('HttpBackendClient', () => {
 		assert.strictEqual(result.attempt.activeLevelId, 'prefix-search');
 		assert.strictEqual(
 			calls[0].url,
-			`${backendUrl}/attempts/22222222-2222-4222-8222-222222222222/submissions`,
+			`${backendUrl}/attempts/22222222-2222-4222-8222-222222222222/test-results`,
 		);
 		assert.strictEqual(calls[0].init?.method, 'POST');
 		assert.deepStrictEqual(
@@ -230,6 +230,52 @@ suite('HttpBackendClient', () => {
 				timedOut: false,
 				passedCount: 6,
 				failedCount: 0,
+			},
+		);
+	});
+
+	test('creates a source submission for an attempt', async () => {
+		const calls: Array<{ url: string; init?: RequestInit }> = [];
+		const client = createClient(async (url, init) => {
+			calls.push({ url, init });
+			return jsonResponse({
+				id: '33333333-3333-4333-8333-333333333333',
+				attemptId: '22222222-2222-4222-8222-222222222222',
+				levelId: 'single-term-search',
+				sequenceNumber: 1,
+				status: 'received',
+				createdAt: '2026-11-14T12:00:00+00:00',
+				startedAt: null,
+				completedAt: null,
+			});
+		});
+
+		const submission = await client.createSubmission(
+			'22222222-2222-4222-8222-222222222222',
+			[
+				{
+					path: 'search_engine.py',
+					content: 'class SearchEngine:\n    pass\n',
+				},
+			],
+		);
+
+		assert.strictEqual(submission.sequenceNumber, 1);
+		assert.strictEqual(submission.status, 'received');
+		assert.strictEqual(
+			calls[0].url,
+			`${backendUrl}/attempts/22222222-2222-4222-8222-222222222222/submissions`,
+		);
+		assert.strictEqual(calls[0].init?.method, 'POST');
+		assert.deepStrictEqual(
+			JSON.parse(calls[0].init?.body as string),
+			{
+				files: [
+					{
+						path: 'search_engine.py',
+						content: 'class SearchEngine:\n    pass\n',
+					},
+				],
 			},
 		);
 	});

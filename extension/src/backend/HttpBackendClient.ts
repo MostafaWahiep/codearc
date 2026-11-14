@@ -12,6 +12,7 @@ import {
 	parsePublicTestBundle,
 	parseTestResult,
 	parseStarterFiles,
+	parseSubmission,
 } from './BackendResponseParser';
 import type {
 	AttemptDto,
@@ -22,6 +23,8 @@ import type {
 	TestSubmission,
 	TestSubmissionResultDto,
 	StarterFilesDto,
+	SubmissionDto,
+	SubmissionSourceFile,
 } from './BackendTypes';
 
 export type BackendFetch = (
@@ -102,9 +105,19 @@ export class HttpBackendClient implements BackendClient {
 		testSubmission: TestSubmission,
 	): Promise<TestSubmissionResultDto> {
 		const method = 'POST';
-		const path = `/attempts/${encodeURIComponent(attemptId)}/submissions`;
+		const path = `/attempts/${encodeURIComponent(attemptId)}/test-results`;
 		const response = await this.request(method, path, {...testSubmission});
 		return parseTestResult(response, method, path);
+	}
+
+	public async createSubmission(
+		attemptId: string,
+		files: SubmissionSourceFile[],
+	): Promise<SubmissionDto> {
+		const method = 'POST';
+		const path = `/attempts/${encodeURIComponent(attemptId)}/submissions`;
+		const response = await this.request(method, path, { files });
+		return parseSubmission(response, method, path);
 	}
 
 	public async getStarterFiles(

@@ -1,20 +1,24 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from app import create_app
 from app.extensions import db
+from app.infrastructure.database.attempt_models import AttemptModel
 
 
 class AttemptLifecycleIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = TemporaryDirectory()
-        database_path = Path(self.temporary_directory.name).joinpath("codearc.db")
+        temporary_root = Path(self.temporary_directory.name)
+        database_path = temporary_root.joinpath("codearc.db")
+        self.submission_storage_root = temporary_root.joinpath("submissions")
         self.app = create_app(
             {
                 "TESTING": True,
                 "SQLALCHEMY_DATABASE_URI": f"sqlite:///{database_path}",
+                "CODEARC_SUBMISSION_STORAGE_ROOT": self.submission_storage_root,
             }
         )
         self.app_context = self.app.app_context()
@@ -29,7 +33,7 @@ class AttemptLifecycleIntegrationTests(unittest.TestCase):
         self.app_context.pop()
         self.temporary_directory.cleanup()
 
-    def test_lists_challenges_starts_attempt_and_retrieves_it(self) -> None:
+    def test_completes_challenge_discovery_and_submission_setup(self) -> None:
         challenges_response = self.client.get("/api/v1/challenges")
 
         self.assertEqual(challenges_response.status_code, 200)
@@ -100,6 +104,40 @@ class AttemptLifecycleIntegrationTests(unittest.TestCase):
         self.assertTrue(
             all(file["category"] == "current" for file in test_bundle["files"])
         )
+
+        submission_response = self.client.post(
+            f"/api/v1/attempts/{started_attempt['id']}/submissions",
+            json={
+                "files": [
+                    {
+                        "path": "search_engine.py",
+                        "content": "class SearchEngine:\n    pass\n",
+                    },
+                ],
+            },
+        )
+
+        self.assertEqual(submission_response.status_code, 201)
+        submission = submission_response.get_json()
+        self.assertEqual(submission["attemptId"], started_attempt["id"])
+        self.assertEqual(submission["levelId"], started_attempt["activeLevelId"])
+        self.assertEqual(submission["sequenceNumber"], 1)
+        self.assertEqual(submission["status"], "received")
+        self.assertTrue(
+            self.submission_storage_root.joinpath(
+                started_attempt["id"],
+                submission["id"],
+                "source",
+                "search_engine.py",
+            ).is_file(),
+        )
+
+        stored_attempt = db.session.get(
+            AttemptModel,
+            UUID(started_attempt["id"]),
+        )
+        self.assertIsNotNone(stored_attempt)
+        self.assertEqual(stored_attempt.submission_count, 1)
 
 
 if __name__ == "__main__":

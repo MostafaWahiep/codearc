@@ -14,6 +14,8 @@ import type {
 	TestSubmissionResultDto,
 	TestSubmissionOutcome,
 	StarterFilesDto,
+	SubmissionDto,
+	SubmissionStatus,
 } from './BackendTypes';
 
 const attemptStatuses: AttemptStatus[] = ['in_progress', 'completed'];
@@ -21,6 +23,13 @@ const levelProgressStatuses: LevelProgressStatus[] = ['active', 'completed'];
 const levelSectionDisplays = Object.values(LevelSectionDisplay);
 const publicTestCategories: PublicTestCategory[] = ['current', 'regression'];
 const testSubmissionOutcomes: TestSubmissionOutcome[] = ['tests_failed', 'level_completed', 'attempt_completed'];
+const submissionStatuses: SubmissionStatus[] = [
+	'received',
+	'running',
+	'passed',
+	'failed',
+	'error',
+];
 
 export function parseChallengeSummaries(
 	value: unknown,
@@ -187,6 +196,39 @@ export function parseTestResult(
 	});
 }
 
+export function parseSubmission(
+	value: unknown,
+	method: string,
+	path: string,
+): SubmissionDto {
+	return parseResponse(method, path, () => {
+		const submission = expectObject(value, 'response');
+		return {
+			id: expectString(submission.id, 'response.id'),
+			attemptId: expectString(submission.attemptId, 'response.attemptId'),
+			levelId: expectString(submission.levelId, 'response.levelId'),
+			sequenceNumber: expectPositiveInteger(
+				submission.sequenceNumber,
+				'response.sequenceNumber',
+			),
+			status: expectOneOf(
+				submission.status,
+				submissionStatuses,
+				'response.status',
+			),
+			createdAt: expectString(submission.createdAt, 'response.createdAt'),
+			startedAt: expectNullableString(
+				submission.startedAt,
+				'response.startedAt',
+			),
+			completedAt: expectNullableString(
+				submission.completedAt,
+				'response.completedAt',
+			),
+		};
+	});
+}
+
 export function parseStarterFiles(
 	value: unknown,
 	method: string,
@@ -309,6 +351,14 @@ function expectNullableString(value: unknown, location: string): string | null {
 function expectNonNegativeInteger(value: unknown, location: string): number {
 	if (!Number.isInteger(value) || typeof value !== 'number' || value < 0) {
 		throw new ResponseShapeError(`${location} must be a non-negative integer`);
+	}
+
+	return value;
+}
+
+function expectPositiveInteger(value: unknown, location: string): number {
+	if (!Number.isInteger(value) || typeof value !== 'number' || value <= 0) {
+		throw new ResponseShapeError(`${location} must be a positive integer`);
 	}
 
 	return value;
