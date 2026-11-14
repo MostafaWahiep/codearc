@@ -4,6 +4,9 @@ from app.extensions import db
 from app.infrastructure.file_challenge_repository import FileChallengeRepository
 from app.infrastructure.runtime import new_uuid, utc_now
 from app.infrastructure.sqlalchemy_attempt_repository import SQLAlchemyAttemptRepository
+from app.infrastructure.sqlalchemy_submission_repository import (
+    SQLAlchemySubmissionRepository,
+)
 from app.services.attempt_service import AttemptService
 from app.services.challenge_service import ChallengeService
 from app.validation.manifest_validator import ManifestValidator
@@ -36,6 +39,11 @@ class Container(containers.DeclarativeContainer):
 
     attempt_repository = providers.Singleton(
         SQLAlchemyAttemptRepository,
+        db=database,
+    )
+
+    submission_repository = providers.Singleton(
+        SQLAlchemySubmissionRepository,
         db=database,
     )
 

@@ -1,5 +1,4 @@
-from datetime import datetime, timezone
-from enum import Enum as PythonEnum
+from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -16,14 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.domain.attempt import AttemptStatus
 from app.domain.challenge_level import LevelProgressStatus
 from app.extensions import db
-
-
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _enum_values(enum_class: type[PythonEnum]) -> list[str]:
-    return [member.value for member in enum_class]
+from app.infrastructure.database.utils import _enum_values, _utc_now
 
 
 class AttemptModel(db.Model):

@@ -66,7 +66,7 @@ class AttemptModelTests(unittest.TestCase):
 
         self.assertEqual(
             set(inspector.get_table_names()),
-            {"attempts", "level_progress"},
+            {"attempts", "level_progress", "submissions"},
         )
 
         attempt_columns = {

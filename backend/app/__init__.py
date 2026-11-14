@@ -6,6 +6,7 @@ from app.config import Config
 from app.container import Container
 from app.extensions import db
 from app.infrastructure.database import attempt_models as _attempt_models
+from app.infrastructure.database import submission_model as _submission_model
 
 
 def create_app(test_config: dict | None = None):

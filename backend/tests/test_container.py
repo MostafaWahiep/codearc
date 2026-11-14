@@ -8,6 +8,9 @@ from app.infrastructure.runtime import new_uuid, utc_now
 from app.infrastructure.sqlalchemy_attempt_repository import (
     SQLAlchemyAttemptRepository,
 )
+from app.infrastructure.sqlalchemy_submission_repository import (
+    SQLAlchemySubmissionRepository,
+)
 from app.services.attempt_service import AttemptService
 from app.services.challenge_service import ChallengeService
 from app.validation.manifest_validator import ManifestValidator
@@ -48,6 +51,15 @@ class ContainerTests(unittest.TestCase):
         second = app.container.attempt_repository()
 
         self.assertIsInstance(first, SQLAlchemyAttemptRepository)
+        self.assertIs(first, second)
+
+    def test_resolves_submission_repository_as_singleton(self) -> None:
+        app = create_app()
+
+        first = app.container.submission_repository()
+        second = app.container.submission_repository()
+
+        self.assertIsInstance(first, SQLAlchemySubmissionRepository)
         self.assertIs(first, second)
 
     def test_resolves_attempt_service_with_runtime_dependencies(self) -> None:

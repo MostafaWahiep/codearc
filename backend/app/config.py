@@ -1,5 +1,6 @@
 from pathlib import Path
 
+
 class Config:
     SQLALCHEMY_DATABASE_URI = "sqlite:///codearc.db"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -10,3 +11,8 @@ class Config:
         "schemas",
         "challenge-manifest.schema.json"
         )
+    BACKEND_ROOT = Path(__file__).resolve().parents[1]
+    CODEARC_SUBMISSION_STORAGE_ROOT = BACKEND_ROOT.joinpath(
+        "instance",
+        "submissions",
+    )
