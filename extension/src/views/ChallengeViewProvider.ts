@@ -350,7 +350,7 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 	private async submitSolution(): Promise<void> {
 		await this.runChecks();
 
-		const pendingSubmission = this.attemptSession.submitTestResults();
+		const pendingSubmission = this.attemptSession.submitSolution();
 
 		this.attemptSessionSnapshot = this.attemptSession.getSnapshot();
 		this.render();

@@ -7,6 +7,7 @@ import {
 	defaultLearnerWorkspacesRoot,
 	LearnerWorkspaceService,
 } from './infrastructure/LearnerWorkspaceService';
+import { LearnerSourceCollector } from './infrastructure/LearnerSourceCollector';
 import { PytestRunner } from './infrastructure/PytestRunner';
 import { PythonRuntimeManager } from './infrastructure/PythonRuntimeManager';
 import { VsCodeMarkdownRenderer } from './infrastructure/VsCodeMarkdownRenderer';
@@ -22,10 +23,14 @@ export function activate(context: vscode.ExtensionContext) {
 	const backendClient = new HttpBackendClient(backendUrl);
 	const challengeCatalog = new ChallengeCatalog(backendClient);
 	const attemptCatalog = new AttemptCatalog(backendClient, prototypeUserId);
-	const attemptSession = new AttemptSession(backendClient);
 	const learnerWorkspace = new LearnerWorkspaceService(
 		defaultLearnerWorkspacesRoot(),
 		backendClient,
+	);
+	const learnerSourceCollector = new LearnerSourceCollector(learnerWorkspace);
+	const attemptSession = new AttemptSession(
+		backendClient,
+		learnerSourceCollector,
 	);
 	const pythonRuntime = createPythonRuntime(context);
 	const localTestRunner = new PytestRunner(

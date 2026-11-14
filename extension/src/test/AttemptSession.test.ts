@@ -4,16 +4,18 @@ import type { OpenedAttempt } from '../application/AttemptCatalog';
 import { AttemptSession } from '../application/AttemptSession';
 import { ChallengeSection } from '../application/ChallengeSection';
 import type { TestEvidence } from '../application/LocalTestRunner';
+import type { SubmissionSourceProvider } from '../application/SubmissionSourceProvider';
 import type { BackendClient } from '../backend/BackendClient';
 import type {
 	AttemptDto,
+	SubmissionSourceFile,
 	TestSubmission,
 	TestSubmissionResultDto,
 } from '../backend/BackendTypes';
 
 suite('AttemptSession', () => {
 	test('opens the backend attempt on its current level', () => {
-		const session = new AttemptSession(createBackendClient());
+		const session = createAttemptSession();
 
 		const snapshot = session.open(challengeSummary(), openedAttempt());
 
@@ -24,7 +26,7 @@ suite('AttemptSession', () => {
 	});
 
 	test('tracks a normalized local test run', () => {
-		const session = new AttemptSession(createBackendClient());
+		const session = createAttemptSession();
 		session.open(challengeSummary(), openedAttempt());
 
 		const running = session.startTestRun();
@@ -56,7 +58,7 @@ suite('AttemptSession', () => {
 	});
 
 	test('maps passing local evidence to a backend submission', () => {
-		const session = new AttemptSession(createBackendClient());
+		const session = createAttemptSession();
 		session.open(challengeSummary(), openedAttempt());
 		session.completeTestRun(testEvidence());
 
@@ -72,7 +74,7 @@ suite('AttemptSession', () => {
 	});
 
 	test('rejects submission before tests have run', () => {
-		const session = new AttemptSession(createBackendClient());
+		const session = createAttemptSession();
 		session.open(challengeSummary(), openedAttempt());
 
 		assert.throws(
@@ -82,7 +84,7 @@ suite('AttemptSession', () => {
 	});
 
 	test('maps failed local evidence to a backend submission', () => {
-		const session = new AttemptSession(createBackendClient());
+		const session = createAttemptSession();
 		session.open(challengeSummary(), openedAttempt());
 		session.completeTestRun(testEvidence({
 			outcome: 'test_failures',
@@ -101,7 +103,7 @@ suite('AttemptSession', () => {
 	});
 
 	test('rejects passing evidence without a process exit code', () => {
-		const session = new AttemptSession(createBackendClient());
+		const session = createAttemptSession();
 		session.open(challengeSummary(), openedAttempt());
 		session.completeTestRun(testEvidence({ exitCode: null }));
 
@@ -112,7 +114,7 @@ suite('AttemptSession', () => {
 	});
 
 	test('maps a timed-out run to a non-zero backend exit code', () => {
-		const session = new AttemptSession(createBackendClient());
+		const session = createAttemptSession();
 		session.open(challengeSummary(), openedAttempt());
 		session.completeTestRun(testEvidence({
 			outcome: 'timed_out',
@@ -132,7 +134,7 @@ suite('AttemptSession', () => {
 	});
 
 	test('returns independent test comparison snapshots', () => {
-		const session = new AttemptSession(createBackendClient());
+		const session = createAttemptSession();
 		session.open(challengeSummary(), openedAttempt());
 		session.completeTestRun(testEvidence({
 			failures: [{
@@ -158,9 +160,20 @@ suite('AttemptSession', () => {
 
 	test('submits mapped evidence and replaces the attempt with backend state', async () => {
 		let request: { attemptId: string; submission: TestSubmission } | undefined;
+		let sourceRequest: {
+			attemptId: string;
+			files: SubmissionSourceFile[];
+		} | undefined;
+		const operations: string[] = [];
 		const loadedLevels: string[] = [];
 		const backendClient = createBackendClient();
+		backendClient.createSubmission = async (attemptId, files) => {
+			operations.push('submit-source');
+			sourceRequest = { attemptId, files };
+			return submissionResponse();
+		};
 		backendClient.submitTestResults = async (attemptId, submission) => {
+			operations.push('submit-test-results');
 			request = { attemptId, submission };
 			return completedLevelResult();
 		};
@@ -171,11 +184,17 @@ suite('AttemptSession', () => {
 				levelId === 'prefix-search' ? 'completed' : 'active',
 			);
 		};
-		const session = new AttemptSession(backendClient);
+		const sourceProvider: SubmissionSourceProvider = {
+			collect: async () => {
+				operations.push('collect-source');
+				return sourceFiles();
+			},
+		};
+		const session = createAttemptSession(backendClient, sourceProvider);
 		session.open(challengeSummary(), openedAttempt());
 		session.completeTestRun(testEvidence());
 
-		const snapshot = await session.submitTestResults();
+		const snapshot = await session.submitSolution();
 
 		assert.deepStrictEqual(request, {
 			attemptId: '22222222-2222-4222-8222-222222222222',
@@ -187,6 +206,15 @@ suite('AttemptSession', () => {
 				failedCount: 0,
 			},
 		});
+		assert.deepStrictEqual(sourceRequest, {
+			attemptId: '22222222-2222-4222-8222-222222222222',
+			files: sourceFiles(),
+		});
+		assert.deepStrictEqual(operations, [
+			'collect-source',
+			'submit-source',
+			'submit-test-results',
+		]);
 		assert.strictEqual(snapshot.submissionStatus, 'accepted');
 		assert.strictEqual(snapshot.attempt.activeLevelId, 'phrase-search');
 		assert.strictEqual(snapshot.level.id, 'prefix-search');
@@ -202,6 +230,60 @@ suite('AttemptSession', () => {
 		assert.deepStrictEqual(loadedLevels, ['prefix-search', 'phrase-search']);
 	});
 
+	test('does not submit test results when source collection fails', async () => {
+		let createdSubmission = false;
+		let submittedTestResults = false;
+		const backendClient = createBackendClient();
+		backendClient.createSubmission = async () => {
+			createdSubmission = true;
+			return submissionResponse();
+		};
+		backendClient.submitTestResults = async () => {
+			submittedTestResults = true;
+			return completedLevelResult();
+		};
+		const sourceProvider: SubmissionSourceProvider = {
+			collect: async () => {
+				throw new Error('Could not read learner source.');
+			},
+		};
+		const session = createAttemptSession(backendClient, sourceProvider);
+		session.open(challengeSummary(), openedAttempt());
+		session.completeTestRun(testEvidence());
+
+		await assert.rejects(
+			session.submitSolution(),
+			/Could not read learner source/,
+		);
+
+		assert.strictEqual(createdSubmission, false);
+		assert.strictEqual(submittedTestResults, false);
+		assert.strictEqual(session.getSnapshot()?.submissionStatus, 'rejected');
+	});
+
+	test('does not submit test results when source upload fails', async () => {
+		let submittedTestResults = false;
+		const backendClient = createBackendClient();
+		backendClient.createSubmission = async () => {
+			throw new Error('Could not save the source snapshot.');
+		};
+		backendClient.submitTestResults = async () => {
+			submittedTestResults = true;
+			return completedLevelResult();
+		};
+		const session = createAttemptSession(backendClient);
+		session.open(challengeSummary(), openedAttempt());
+		session.completeTestRun(testEvidence());
+
+		await assert.rejects(
+			session.submitSolution(),
+			/Could not save the source snapshot/,
+		);
+
+		assert.strictEqual(submittedTestResults, false);
+		assert.strictEqual(session.getSnapshot()?.submissionStatus, 'rejected');
+	});
+
 	test('keeps failed submission evidence on the current level', async () => {
 		let levelRequestCount = 0;
 		const backendClient = createBackendClient();
@@ -209,7 +291,7 @@ suite('AttemptSession', () => {
 			levelRequestCount += 1;
 			return visibleLevel('prefix-search', 'active');
 		};
-		const session = new AttemptSession(backendClient);
+		const session = createAttemptSession(backendClient);
 		session.open(challengeSummary(), openedAttempt());
 		session.completeTestRun(testEvidence({
 			outcome: 'test_failures',
@@ -218,7 +300,7 @@ suite('AttemptSession', () => {
 			exitCode: 1,
 		}));
 
-		const snapshot = await session.submitTestResults();
+		const snapshot = await session.submitSolution();
 
 		assert.strictEqual(snapshot.submissionStatus, 'accepted');
 		assert.strictEqual(snapshot.level.id, 'prefix-search');
@@ -232,11 +314,11 @@ suite('AttemptSession', () => {
 		backendClient.submitTestResults = async () => completedAttemptResult();
 		backendClient.getVisibleLevel = async (_attemptId, levelId) =>
 			visibleLevel(levelId, 'completed');
-		const session = new AttemptSession(backendClient);
+		const session = createAttemptSession(backendClient);
 		session.open(challengeSummary(), openedAttempt());
 		session.completeTestRun(testEvidence());
 
-		const snapshot = await session.submitTestResults();
+		const snapshot = await session.submitSolution();
 
 		assert.strictEqual(snapshot.attempt.status, 'completed');
 		assert.strictEqual(snapshot.level.status, 'completed');
@@ -248,11 +330,11 @@ suite('AttemptSession', () => {
 		const pending = deferred<TestSubmissionResultDto>();
 		const backendClient = createBackendClient();
 		backendClient.submitTestResults = async () => pending.promise;
-		const session = new AttemptSession(backendClient);
+		const session = createAttemptSession(backendClient);
 		session.open(challengeSummary(), openedAttempt());
 		session.completeTestRun(testEvidence());
 
-		const submission = session.submitTestResults();
+		const submission = session.submitSolution();
 
 		assert.strictEqual(session.getSnapshot()?.submissionStatus, 'submitting');
 		pending.resolve(completedLevelResult());
@@ -264,12 +346,12 @@ suite('AttemptSession', () => {
 		backendClient.submitTestResults = async () => {
 			throw new Error('The submitted level is stale.');
 		};
-		const session = new AttemptSession(backendClient);
+		const session = createAttemptSession(backendClient);
 		const original = session.open(challengeSummary(), openedAttempt());
 		session.completeTestRun(testEvidence());
 
 		await assert.rejects(
-			session.submitTestResults(),
+			session.submitSolution(),
 			/The submitted level is stale/,
 		);
 
@@ -289,13 +371,13 @@ suite('AttemptSession', () => {
 		const pending = deferred<TestSubmissionResultDto>();
 		const backendClient = createBackendClient();
 		backendClient.submitTestResults = async () => pending.promise;
-		const session = new AttemptSession(backendClient);
+		const session = createAttemptSession(backendClient);
 		session.open(challengeSummary(), openedAttempt());
 		session.completeTestRun(testEvidence());
-		const firstSubmission = session.submitTestResults();
+		const firstSubmission = session.submitSolution();
 
 		await assert.rejects(
-			session.submitTestResults(),
+			session.submitSolution(),
 			/A CodeArc submission is already in progress/,
 		);
 
@@ -307,10 +389,10 @@ suite('AttemptSession', () => {
 		const pending = deferred<TestSubmissionResultDto>();
 		const backendClient = createBackendClient();
 		backendClient.submitTestResults = async () => pending.promise;
-		const session = new AttemptSession(backendClient);
+		const session = createAttemptSession(backendClient);
 		session.open(challengeSummary(), openedAttempt());
 		session.completeTestRun(testEvidence());
-		const submission = session.submitTestResults();
+		const submission = session.submitSolution();
 
 		assert.throws(
 			() => session.startTestRun(),
@@ -328,7 +410,7 @@ suite('AttemptSession', () => {
 			requests.push({ attemptId, levelId });
 			return visibleLevel(levelId, 'completed');
 		};
-		const session = new AttemptSession(backendClient);
+		const session = createAttemptSession(backendClient);
 		session.open(challengeSummary(), openedAttempt());
 		session.selectSection(ChallengeSection.Results);
 
@@ -351,7 +433,7 @@ suite('AttemptSession', () => {
 			requestCount += 1;
 			return visibleLevel('phrase-search', 'active');
 		};
-		const session = new AttemptSession(backendClient);
+		const session = createAttemptSession(backendClient);
 		session.open(challengeSummary(), openedAttempt());
 
 		await assert.rejects(
@@ -362,7 +444,7 @@ suite('AttemptSession', () => {
 	});
 
 	test('rejects an opened level that does not match the attempt cursor', () => {
-		const session = new AttemptSession(createBackendClient());
+		const session = createAttemptSession();
 		const opened = openedAttempt();
 		opened.level = visibleLevel('single-term-search', 'completed');
 
@@ -372,6 +454,19 @@ suite('AttemptSession', () => {
 		);
 	});
 });
+
+function createAttemptSession(
+	backendClient: BackendClient = createBackendClient(),
+	sourceProvider: SubmissionSourceProvider = createSubmissionSourceProvider(),
+): AttemptSession {
+	return new AttemptSession(backendClient, sourceProvider);
+}
+
+function createSubmissionSourceProvider(): SubmissionSourceProvider {
+	return {
+		collect: async () => sourceFiles(),
+	};
+}
 
 function createBackendClient(): BackendClient {
 	return {
@@ -387,12 +482,32 @@ function createBackendClient(): BackendClient {
 			attempt: openedAttempt().attempt,
 			completedLevelId: null,
 		}),
-		createSubmission: async () => {
-			throw new Error('Not used');
-		},
+		createSubmission: async () => submissionResponse(),
 		getStarterFiles: async () => {
 			throw new Error('Not implemented by this test fake.');
 		},
+	};
+}
+
+function sourceFiles(): SubmissionSourceFile[] {
+	return [
+		{
+			path: 'search_engine.py',
+			content: 'class SearchEngine:\n    pass\n',
+		},
+	];
+}
+
+function submissionResponse() {
+	return {
+		id: '33333333-3333-4333-8333-333333333333',
+		attemptId: '22222222-2222-4222-8222-222222222222',
+		levelId: 'prefix-search',
+		sequenceNumber: 1,
+		status: 'received' as const,
+		createdAt: '2026-11-14T12:00:00+00:00',
+		startedAt: null,
+		completedAt: null,
 	};
 }
 

@@ -9,6 +9,7 @@ import type {
 import type { OpenedAttempt } from './AttemptCatalog';
 import type { TestEvidence } from './LocalTestRunner';
 import { ChallengeSection } from './ChallengeSection';
+import type { SubmissionSourceProvider } from './SubmissionSourceProvider';
 
 const TIMEOUT_EXIT_CODE = 124;
 
@@ -34,7 +35,10 @@ export class AttemptSession {
 	private snapshot: AttemptSessionSnapshot | undefined;
 	private revision = 0;
 
-	public constructor(private readonly backendClient: BackendClient) {}
+	public constructor(
+		private readonly backendClient: BackendClient,
+		private readonly submissionSourceProvider: SubmissionSourceProvider,
+	) {}
 
 	public open(
 		challenge: ChallengeSummaryDto,
@@ -145,13 +149,26 @@ export class AttemptSession {
 		this.snapshot = undefined;
 	}
 
-	public async submitTestResults(): Promise<AttemptSessionSnapshot> {
+	public async submitSolution(): Promise<AttemptSessionSnapshot> {
 		const submission = this.createTestSubmission();
 		const current = this.startSubmission();
 		const revision = ++this.revision;
 		let result: TestSubmissionResultDto;
 
 		try {
+			const sourceFiles = await this.submissionSourceProvider.collect(
+				current.attempt,
+			);
+			if (revision !== this.revision) {
+				return this.getRequiredSnapshot();
+			}
+			await this.backendClient.createSubmission(
+				current.attempt.id,
+				sourceFiles,
+			);
+			if (revision !== this.revision) {
+				return this.getRequiredSnapshot();
+			}
 			result = await this.backendClient.submitTestResults(
 				current.attempt.id,
 				submission,

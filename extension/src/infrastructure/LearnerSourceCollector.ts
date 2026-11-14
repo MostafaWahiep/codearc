@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { SubmissionSourceProvider } from '../application/SubmissionSourceProvider';
 import type { AttemptDto, SubmissionSourceFile } from '../backend/BackendTypes';
 import type { LearnerWorkspaceService } from './LearnerWorkspaceService';
 
@@ -9,7 +10,7 @@ const excludedDirectories = new Set([
 	'venv',
 ]);
 
-export class LearnerSourceCollector {
+export class LearnerSourceCollector implements SubmissionSourceProvider {
 	public constructor(
 		private readonly learnerWorkspace: LearnerWorkspaceService,
 	) {}

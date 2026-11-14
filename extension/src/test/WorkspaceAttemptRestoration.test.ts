@@ -45,7 +45,10 @@ suite('Workspace attempt restoration', () => {
 			backendClient,
 			() => [workspaceFolder(challengeRoot)],
 		);
-		const attemptSession = new AttemptSession(backendClient);
+		const attemptSession = new AttemptSession(
+			backendClient,
+			{ collect: async () => [] },
+		);
 		const provider = new ChallengeViewProvider(
 			new ChallengeCatalog(backendClient),
 			new AttemptCatalog(backendClient, userId),
