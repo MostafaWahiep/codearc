@@ -2,6 +2,9 @@ from dependency_injector import containers, providers
 
 from app.extensions import db
 from app.infrastructure.file_challenge_repository import FileChallengeRepository
+from app.infrastructure.local_submission_snapshot_store import (
+    LocalSubmissionSnapshotStore,
+)
 from app.infrastructure.runtime import new_uuid, utc_now
 from app.infrastructure.sqlalchemy_attempt_repository import SQLAlchemyAttemptRepository
 from app.infrastructure.sqlalchemy_submission_repository import (
@@ -45,6 +48,11 @@ class Container(containers.DeclarativeContainer):
     submission_repository = providers.Singleton(
         SQLAlchemySubmissionRepository,
         db=database,
+    )
+
+    submission_snapshot_store = providers.Singleton(
+        LocalSubmissionSnapshotStore,
+        root_path=config.CODEARC_SUBMISSION_STORAGE_ROOT,
     )
 
     challenge_service = providers.Factory(

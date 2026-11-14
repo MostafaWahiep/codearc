@@ -4,6 +4,9 @@ from uuid import UUID
 
 from app import create_app
 from app.infrastructure.file_challenge_repository import FileChallengeRepository
+from app.infrastructure.local_submission_snapshot_store import (
+    LocalSubmissionSnapshotStore,
+)
 from app.infrastructure.runtime import new_uuid, utc_now
 from app.infrastructure.sqlalchemy_attempt_repository import (
     SQLAlchemyAttemptRepository,
@@ -60,6 +63,15 @@ class ContainerTests(unittest.TestCase):
         second = app.container.submission_repository()
 
         self.assertIsInstance(first, SQLAlchemySubmissionRepository)
+        self.assertIs(first, second)
+
+    def test_resolves_submission_snapshot_store_as_singleton(self) -> None:
+        app = create_app()
+
+        first = app.container.submission_snapshot_store()
+        second = app.container.submission_snapshot_store()
+
+        self.assertIsInstance(first, LocalSubmissionSnapshotStore)
         self.assertIs(first, second)
 
     def test_resolves_attempt_service_with_runtime_dependencies(self) -> None:
