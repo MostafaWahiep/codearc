@@ -17,7 +17,11 @@ from app.infrastructure.sqlalchemy_submission_repository import (
 from app.infrastructure.sqlalchemy_transaction_manager import (
     SQLAlchemyTransactionManager,
 )
+from app.services.analysis.python_ast_analyzer import (
+    PythonAstChangeImpactAnalyzer,
+)
 from app.services.attempt_service import AttemptService
+from app.services.change_impact_service import ChangeImpactService
 from app.services.challenge_service import ChallengeService
 from app.services.submission_service import SubmissionService
 from app.validation.manifest_validator import ManifestValidator
@@ -87,6 +91,15 @@ class ContainerTests(unittest.TestCase):
         self.assertIsInstance(first, SQLAlchemyTransactionManager)
         self.assertIs(first, second)
 
+    def test_resolves_change_impact_analyzer_as_singleton(self) -> None:
+        app = create_app()
+
+        first = app.container.change_impact_analyzer()
+        second = app.container.change_impact_analyzer()
+
+        self.assertIsInstance(first, PythonAstChangeImpactAnalyzer)
+        self.assertIs(first, second)
+
     def test_resolves_attempt_service_with_runtime_dependencies(self) -> None:
         app = create_app()
 
@@ -127,6 +140,25 @@ class ContainerTests(unittest.TestCase):
             first._transaction_manager,
             app.container.transaction_manager(),
         )
+
+    def test_resolves_change_impact_service_with_dependencies(self) -> None:
+        app = create_app()
+
+        first = app.container.change_impact_service()
+        second = app.container.change_impact_service()
+
+        self.assertIsInstance(first, ChangeImpactService)
+        self.assertIsNot(first, second)
+        self.assertIs(first._attempt_repository, app.container.attempt_repository())
+        self.assertIs(
+            first._challenge_repository,
+            app.container.challenge_repository(),
+        )
+        self.assertIs(
+            first._snapshot_store,
+            app.container.submission_snapshot_store(),
+        )
+        self.assertIs(first._analyzer, app.container.change_impact_analyzer())
 
 
 if __name__ == "__main__":

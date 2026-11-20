@@ -5,6 +5,7 @@ from uuid import UUID
 
 from app import create_app
 from app.domain.attempt import Attempt, AttemptStatus, LevelProgress
+from app.domain.change_impact import ChangeImpact, FileImpact, ModifiedMethod
 from app.domain.challenge_level import LevelProgressStatus, VisibleLevel
 from app.domain.level_section import LevelSection, SectionDisplay
 from app.domain.submission import (
@@ -23,6 +24,10 @@ from app.repositories.attempt_repository import AttemptNotFound
 from app.repositories.challenge_repository import ChallengeNotFound
 from app.repositories.submission_snapshot_store import InvalidSnapshot
 from app.services.attempt_service import AttemptLevelNotVisible, AttemptService
+from app.services.change_impact_service import (
+    ChangeImpactService,
+    LevelChangeImpactUnavailable,
+)
 from app.services.submission_service import SubmissionService
 
 
@@ -60,6 +65,7 @@ class AttemptEndpointTests(unittest.TestCase):
         self.app = create_app()
         self.client = self.app.test_client()
         self.service = Mock(spec=AttemptService)
+        self.change_impact_service = Mock(spec=ChangeImpactService)
         self.submission_service = Mock(spec=SubmissionService)
 
     def test_starts_attempt_using_injected_service(self) -> None:
@@ -359,6 +365,103 @@ class AttemptEndpointTests(unittest.TestCase):
                 )
             },
         )
+
+    def test_returns_change_impact_for_a_completed_level(self) -> None:
+        self.change_impact_service.get_level_impact.return_value = ChangeImpact(
+            changed_files=(
+                FileImpact(
+                    path="search_engine.py",
+                    added_methods=("SearchEngine.search_prefix",),
+                    removed_methods=("SearchEngine.old_helper",),
+                    modified_methods=(
+                        ModifiedMethod(
+                            file_path="search_engine.py",
+                            qualified_name="SearchEngine.add_document",
+                            lines_added=3,
+                            lines_removed=1,
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        with self.app.container.change_impact_service.override(
+            self.change_impact_service,
+        ):
+            response = self.client.get(
+                f"/api/v1/attempts/{ATTEMPT_ID}/levels/"
+                "prefix-search/change-impact"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json(),
+            {
+                "levelId": "prefix-search",
+                "summary": {
+                    "changedFileCount": 1,
+                    "modifiedMethodCount": 1,
+                    "changedLineCount": 4,
+                },
+                "files": [
+                    {
+                        "path": "search_engine.py",
+                        "addedMethods": ["SearchEngine.search_prefix"],
+                        "removedMethods": ["SearchEngine.old_helper"],
+                        "modifiedMethods": [
+                            {
+                                "qualifiedName": "SearchEngine.add_document",
+                                "linesAdded": 3,
+                                "linesRemoved": 1,
+                                "changedLineCount": 4,
+                            }
+                        ],
+                    }
+                ],
+            },
+        )
+        self.change_impact_service.get_level_impact.assert_called_once_with(
+            attempt_id=ATTEMPT_ID,
+            level_id="prefix-search",
+        )
+
+    def test_returns_not_found_for_change_impact_on_unknown_attempt(self) -> None:
+        self.change_impact_service.get_level_impact.side_effect = AttemptNotFound(
+            ATTEMPT_ID,
+        )
+
+        with self.app.container.change_impact_service.override(
+            self.change_impact_service,
+        ):
+            response = self.client.get(
+                f"/api/v1/attempts/{ATTEMPT_ID}/levels/"
+                "prefix-search/change-impact"
+            )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(
+            response.get_json(),
+            {"message": f"Attempt '{ATTEMPT_ID}' was not found"},
+        )
+
+    def test_rejects_unavailable_level_change_impact(self) -> None:
+        error = LevelChangeImpactUnavailable(
+            ATTEMPT_ID,
+            "single-term-search",
+            "the first level has no previous level to compare",
+        )
+        self.change_impact_service.get_level_impact.side_effect = error
+
+        with self.app.container.change_impact_service.override(
+            self.change_impact_service,
+        ):
+            response = self.client.get(
+                f"/api/v1/attempts/{ATTEMPT_ID}/levels/"
+                "single-term-search/change-impact"
+            )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.get_json(), {"message": str(error)})
 
     def test_returns_visible_public_test_files(self) -> None:
         self.service.get_visible_tests.return_value = (

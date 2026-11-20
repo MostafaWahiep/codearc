@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request
 from app.api.v1.exceptions import InvalidRequest
 from app.container import Container
 from app.domain.attempt import Attempt
+from app.domain.change_impact import ChangeImpact
 from app.domain.challenge_level import VisibleLevel
 from app.domain.submission import SourceFile, SourceSnapshot, Submission
 from app.domain.test_bundle import PublicTestFile
@@ -18,6 +19,10 @@ from app.services.attempt_service import (
     AttemptLevelNotVisible,
     AttemptLevelNotActive,
     AttemptService,
+)
+from app.services.change_impact_service import (
+    ChangeImpactService,
+    LevelChangeImpactUnavailable,
 )
 from app.services.submission_service import SubmissionService
 
@@ -123,6 +128,34 @@ def _serialize_submission(submission: Submission) -> dict:
             if submission.completed_at
             else None
         ),
+    }
+
+
+def _serialize_change_impact(level_id: str, impact: ChangeImpact) -> dict:
+    return {
+        "levelId": level_id,
+        "summary": {
+            "changedFileCount": impact.changed_file_count,
+            "modifiedMethodCount": impact.modified_method_count,
+            "changedLineCount": impact.changed_line_count,
+        },
+        "files": [
+            {
+                "path": file.path,
+                "addedMethods": list(file.added_methods),
+                "removedMethods": list(file.removed_methods),
+                "modifiedMethods": [
+                    {
+                        "qualifiedName": method.qualified_name,
+                        "linesAdded": method.lines_added,
+                        "linesRemoved": method.lines_removed,
+                        "changedLineCount": method.changed_line_count,
+                    }
+                    for method in file.modified_methods
+                ],
+            }
+            for file in impact.changed_files
+        ],
     }
 
 
@@ -307,6 +340,33 @@ def get_visible_level_in_attempt(
             "message": str(error),
         }), 404
     except AttemptLevelNotVisible as error:
+        return jsonify({
+            "message": str(error),
+        }), 409
+
+
+@attempt_bp.get(
+    "/<uuid:attempt_id>/levels/<string:level_id>/change-impact"
+)
+@inject
+def get_level_change_impact(
+    attempt_id: UUID,
+    level_id: str,
+    change_impact_service: ChangeImpactService = Provide[
+        Container.change_impact_service
+    ],
+):
+    try:
+        impact = change_impact_service.get_level_impact(
+            attempt_id=attempt_id,
+            level_id=level_id,
+        )
+        return jsonify(_serialize_change_impact(level_id, impact)), 200
+    except AttemptNotFound as error:
+        return jsonify({
+            "message": str(error),
+        }), 404
+    except LevelChangeImpactUnavailable as error:
         return jsonify({
             "message": str(error),
         }), 409

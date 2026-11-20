@@ -13,7 +13,11 @@ from app.infrastructure.sqlalchemy_submission_repository import (
 from app.infrastructure.sqlalchemy_transaction_manager import (
     SQLAlchemyTransactionManager,
 )
+from app.services.analysis.python_ast_analyzer import (
+    PythonAstChangeImpactAnalyzer,
+)
 from app.services.attempt_service import AttemptService
+from app.services.change_impact_service import ChangeImpactService
 from app.services.challenge_service import ChallengeService
 from app.services.submission_service import SubmissionService
 from app.validation.manifest_validator import ManifestValidator
@@ -64,6 +68,10 @@ class Container(containers.DeclarativeContainer):
         root_path=config.CODEARC_SUBMISSION_STORAGE_ROOT,
     )
 
+    change_impact_analyzer = providers.Singleton(
+        PythonAstChangeImpactAnalyzer,
+    )
+
     challenge_service = providers.Factory(
         ChallengeService,
         challenge_repository=challenge_repository,
@@ -87,4 +95,12 @@ class Container(containers.DeclarativeContainer):
         transaction_manager=transaction_manager,
         clock=clock,
         id_factory=id_factory,
+    )
+
+    change_impact_service = providers.Factory(
+        ChangeImpactService,
+        attempt_repository=attempt_repository,
+        challenge_repository=challenge_repository,
+        snapshot_store=submission_snapshot_store,
+        analyzer=change_impact_analyzer,
     )
