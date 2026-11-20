@@ -111,5 +111,9 @@ class LevelProgressModel(db.Model):
         default=_utc_now,
         onupdate=_utc_now,
     )
+    latest_passed_submission_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("submissions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     attempt: Mapped[AttemptModel] = relationship(back_populates="levels")

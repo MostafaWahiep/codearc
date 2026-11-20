@@ -102,11 +102,16 @@ export class HttpBackendClient implements BackendClient {
 
 	public async submitTestResults(
 		attemptId: string,
+		submissionId: string,
 		testSubmission: TestSubmission,
 	): Promise<TestSubmissionResultDto> {
 		const method = 'POST';
 		const path = `/attempts/${encodeURIComponent(attemptId)}/test-results`;
-		const response = await this.request(method, path, {...testSubmission});
+		const body = {
+			submissionId,
+			...testSubmission,
+		};
+		const response = await this.request(method, path, body);
 		return parseTestResult(response, method, path);
 	}
 

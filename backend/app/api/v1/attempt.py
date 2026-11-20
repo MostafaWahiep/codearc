@@ -14,6 +14,7 @@ from app.repositories.attempt_repository import AttemptNotFound
 from app.repositories.challenge_repository import ChallengeNotFound
 from app.repositories.submission_snapshot_store import InvalidSnapshot
 from app.services.attempt_service import (
+    InvalidAttemptState,
     AttemptLevelNotVisible,
     AttemptLevelNotActive,
     AttemptService,
@@ -132,6 +133,7 @@ def _parse_test_submission(body: object) -> TestSubmission:
     level_id = body.get("levelId")
     exit_code = body.get("exitCode")
     timed_out = body.get("timedOut")
+    submission_id = body.get("submissionId")
     passed_count = body.get("passedCount")
     failed_count = body.get("failedCount")
 
@@ -143,6 +145,11 @@ def _parse_test_submission(body: object) -> TestSubmission:
 
     if type(timed_out) is not bool:
         raise InvalidRequest("timedOut must be a boolean")
+
+    try:
+        parsed_submission_id = UUID(submission_id)
+    except (TypeError, ValueError):
+        raise InvalidRequest("submissionId must be a valid UUID")
 
     if type(passed_count) is not int or passed_count < 0:
         raise InvalidRequest("passedCount must be a non-negative integer")
@@ -156,6 +163,7 @@ def _parse_test_submission(body: object) -> TestSubmission:
         timed_out=timed_out,
         passed_count=passed_count,
         failed_count=failed_count,
+        submission_id=parsed_submission_id,
     )
 
 
@@ -346,7 +354,7 @@ def submit_test_results(
             "message": str(error),
         }), 404
 
-    except AttemptLevelNotActive as error:
+    except (AttemptLevelNotActive, InvalidAttemptState) as error:
         return jsonify({
             "message": str(error),
         }), 409

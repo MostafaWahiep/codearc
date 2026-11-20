@@ -73,6 +73,7 @@ class Container(containers.DeclarativeContainer):
         AttemptService,
         attempt_repository=attempt_repository,
         challenge_repository=challenge_repository,
+        submission_repository=submission_repository,
         transaction_manager=transaction_manager,
         clock=clock,
         id_factory=id_factory,

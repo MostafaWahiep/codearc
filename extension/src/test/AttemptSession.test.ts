@@ -159,7 +159,11 @@ suite('AttemptSession', () => {
 	});
 
 	test('submits mapped evidence and replaces the attempt with backend state', async () => {
-		let request: { attemptId: string; submission: TestSubmission } | undefined;
+		let request: {
+			attemptId: string;
+			submissionId: string;
+			submission: TestSubmission;
+		} | undefined;
 		let sourceRequest: {
 			attemptId: string;
 			files: SubmissionSourceFile[];
@@ -172,9 +176,9 @@ suite('AttemptSession', () => {
 			sourceRequest = { attemptId, files };
 			return submissionResponse();
 		};
-		backendClient.submitTestResults = async (attemptId, submission) => {
+		backendClient.submitTestResults = async (attemptId, submissionId, submission) => {
 			operations.push('submit-test-results');
-			request = { attemptId, submission };
+			request = { attemptId, submissionId, submission };
 			return completedLevelResult();
 		};
 		backendClient.getVisibleLevel = async (_attemptId, levelId) => {
@@ -198,6 +202,7 @@ suite('AttemptSession', () => {
 
 		assert.deepStrictEqual(request, {
 			attemptId: '22222222-2222-4222-8222-222222222222',
+			submissionId: '33333333-3333-4333-8333-333333333333',
 			submission: {
 				levelId: 'prefix-search',
 				exitCode: 0,

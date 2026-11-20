@@ -87,6 +87,7 @@ class SQLAlchemyAttemptRepository(AttemptRepository):
             progress_model.status = entry.status
             progress_model.submission_count = entry.submission_count
             progress_model.completed_at = entry.completed_at
+            progress_model.latest_passed_submission_id = entry.latest_passed_submission_id
 
     @staticmethod
     def _map_attempt_to_model(attempt: Attempt) -> AttemptModel:
@@ -116,6 +117,7 @@ class SQLAlchemyAttemptRepository(AttemptRepository):
             status=progress.status,
             submission_count=progress.submission_count,
             completed_at=progress.completed_at,
+            latest_passed_submission_id=progress.latest_passed_submission_id,
         )
 
     @staticmethod
@@ -156,6 +158,7 @@ class SQLAlchemyAttemptRepository(AttemptRepository):
                 if model.completed_at is not None
                 else None
             ),
+            latest_passed_submission_id=model.latest_passed_submission_id,
         )
 
     @staticmethod

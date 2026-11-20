@@ -162,7 +162,7 @@ export class AttemptSession {
 			if (revision !== this.revision) {
 				return this.getRequiredSnapshot();
 			}
-			await this.backendClient.createSubmission(
+			const createSubmissionResponse = await this.backendClient.createSubmission(
 				current.attempt.id,
 				sourceFiles,
 			);
@@ -171,6 +171,7 @@ export class AttemptSession {
 			}
 			result = await this.backendClient.submitTestResults(
 				current.attempt.id,
+				createSubmissionResponse.id,
 				submission,
 			);
 

@@ -403,6 +403,7 @@ class AttemptEndpointTests(unittest.TestCase):
             response = self.client.post(
                 f"/api/v1/attempts/{ATTEMPT_ID}/test-results",
                 json={
+                    "submissionId": str(SUBMISSION_ID),
                     "levelId": "single-term-search",
                     "exitCode": 1,
                     "timedOut": False,
@@ -421,8 +422,30 @@ class AttemptEndpointTests(unittest.TestCase):
                 timed_out=False,
                 passed_count=4,
                 failed_count=1,
+                submission_id=SUBMISSION_ID,
             ),
         )
+
+    def test_rejects_invalid_test_result_submission_id(self) -> None:
+        with self.app.container.attempt_service.override(self.service):
+            response = self.client.post(
+                f"/api/v1/attempts/{ATTEMPT_ID}/test-results",
+                json={
+                    "submissionId": "not-a-uuid",
+                    "levelId": "single-term-search",
+                    "exitCode": 1,
+                    "timedOut": False,
+                    "passedCount": 0,
+                    "failedCount": 1,
+                },
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json(),
+            {"message": "submissionId must be a valid UUID"},
+        )
+        self.service.submit_test_results.assert_not_called()
 
     def test_creates_submission_from_source_files(self) -> None:
         submission = Submission(

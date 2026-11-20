@@ -143,18 +143,34 @@ class AttemptModelTests(unittest.TestCase):
                 "submission_count",
                 "completed_at",
                 "updated_at",
+                "latest_passed_submission_id",
             },
         )
         self.assertFalse(progress_columns["attempt_id"]["nullable"])
         self.assertFalse(progress_columns["submission_count"]["nullable"])
         self.assertTrue(progress_columns["completed_at"]["nullable"])
 
-        foreign_keys = inspector.get_foreign_keys("level_progress")
-        self.assertEqual(len(foreign_keys), 1)
-        self.assertEqual(foreign_keys[0]["constrained_columns"], ["attempt_id"])
-        self.assertEqual(foreign_keys[0]["referred_table"], "attempts")
-        self.assertEqual(foreign_keys[0]["referred_columns"], ["id"])
-        self.assertEqual(foreign_keys[0]["options"].get("ondelete"), "CASCADE")
+        foreign_keys = {
+            foreign_key["constrained_columns"][0]: foreign_key
+            for foreign_key in inspector.get_foreign_keys("level_progress")
+        }
+        self.assertEqual(
+            set(foreign_keys),
+            {"attempt_id", "latest_passed_submission_id"},
+        )
+        self.assertEqual(foreign_keys["attempt_id"]["referred_table"], "attempts")
+        self.assertEqual(
+            foreign_keys["attempt_id"]["options"].get("ondelete"),
+            "CASCADE",
+        )
+        self.assertEqual(
+            foreign_keys["latest_passed_submission_id"]["referred_table"],
+            "submissions",
+        )
+        self.assertEqual(
+            foreign_keys["latest_passed_submission_id"]["options"].get("ondelete"),
+            "SET NULL",
+        )
 
         unique_constraints = {
             constraint["name"]: constraint["column_names"]

@@ -205,6 +205,7 @@ suite('HttpBackendClient', () => {
 
 		const result = await client.submitTestResults(
 			'22222222-2222-4222-8222-222222222222',
+			'33333333-3333-4333-8333-333333333333',
 			{
 				levelId: 'single-term-search',
 				exitCode: 0,
@@ -225,6 +226,7 @@ suite('HttpBackendClient', () => {
 		assert.deepStrictEqual(
 			JSON.parse(calls[0].init?.body as string),
 			{
+				submissionId: '33333333-3333-4333-8333-333333333333',
 				levelId: 'single-term-search',
 				exitCode: 0,
 				timedOut: false,

@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from enum import Enum
 
+from uuid import UUID
+
 from app.domain.attempt import Attempt
 
 
@@ -11,6 +13,7 @@ class TestSubmission:
     timed_out: bool
     passed_count: int
     failed_count: int
+    submission_id: UUID
 
 
 class TestSubmissionOutcome(str, Enum):

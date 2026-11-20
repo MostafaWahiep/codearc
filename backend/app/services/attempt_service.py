@@ -15,6 +15,7 @@ from app.domain.test_submission import (
 from app.repositories.attempt_repository import AttemptNotFound, AttemptRepository
 from app.repositories.challenge_repository import ChallengeRepository
 from app.repositories.transaction_manager import TransactionManager
+from app.repositories.submission_repository import SubmissionRepository
 
 
 class AttemptLevelNotVisible(LookupError):
@@ -46,12 +47,14 @@ class AttemptService:
         self,
         attempt_repository: AttemptRepository,
         challenge_repository: ChallengeRepository,
+        submission_repository: SubmissionRepository,
         transaction_manager: TransactionManager,
         clock: Callable[[], datetime],
         id_factory: Callable[[], UUID],
     ) -> None:
         self._attempt_repository = attempt_repository
         self._challenge_repository = challenge_repository
+        self._submission_repository = submission_repository
         self._transaction_manager = transaction_manager
         self._clock = clock
         self._id_factory = id_factory
@@ -165,6 +168,25 @@ class AttemptService:
                 attempt.active_level_id,
             )
 
+        submission_record = self._submission_repository.get_by_id(submission.submission_id)
+
+        if submission_record is None:
+            raise InvalidAttemptState(
+                f"Submission '{submission.submission_id}' not found for attempt '{attempt_id}'"
+            )
+
+        if submission_record.attempt_id != attempt_id:
+            raise InvalidAttemptState(
+                f"Submission '{submission.submission_id}' does not belong to attempt '{attempt_id}'"
+            )
+
+        if submission_record.level_id != submission.level_id:
+            raise InvalidAttemptState(
+                f"Submission '{submission.submission_id}' level '{submission_record.level_id}' "
+                f"does not match submission level '{submission.level_id}'"
+            )
+
+
         level_progress = self._find_level_progress(attempt, submission.level_id)
 
         challenge = self._challenge_repository.get_manifest(
@@ -194,6 +216,7 @@ class AttemptService:
             level_progress,
             status=LevelProgressStatus.COMPLETED,
             completed_at=level_progress.completed_at or now,
+            latest_passed_submission_id=submission.submission_id,
         )
         attempt = self._replace_level_progress(attempt, level_progress)
 
@@ -276,6 +299,7 @@ class AttemptService:
             status=LevelProgressStatus.ACTIVE,
             submission_count=0,
             completed_at=None,
+            latest_passed_submission_id=None,
         )
 
     def _fail_test_run(

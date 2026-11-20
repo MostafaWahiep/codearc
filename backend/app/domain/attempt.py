@@ -17,6 +17,7 @@ class LevelProgress:
     status: LevelProgressStatus
     submission_count: int
     completed_at: datetime | None
+    latest_passed_submission_id: UUID | None = None
 
 
 @dataclass(frozen=True)

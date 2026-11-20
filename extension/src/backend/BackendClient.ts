@@ -35,6 +35,7 @@ export interface BackendClient {
 
 	submitTestResults(
 		attemptId: string,
+		submissionId: string,
 		testSubmission: TestSubmission,
 	): Promise<TestSubmissionResultDto>;
 

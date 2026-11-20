@@ -13,6 +13,7 @@ from app.domain.challenge_level import (
     LoadedChallengeLevel,
 )
 from app.domain.level_section import LevelSection, SectionDisplay
+from app.domain.submission import Submission, SubmissionStatus
 from app.domain.test_bundle import PublicTestFile, TestCategory
 from app.domain.test_submission import (
     TestSubmission,
@@ -20,6 +21,7 @@ from app.domain.test_submission import (
 )
 from app.repositories.attempt_repository import AttemptNotFound, AttemptRepository
 from app.repositories.challenge_repository import ChallengeRepository
+from app.repositories.submission_repository import SubmissionRepository
 from app.repositories.transaction_manager import TransactionManager
 from app.services.attempt_service import (
     AttemptLevelNotActive,
@@ -33,13 +35,28 @@ class AttemptServiceTests(unittest.TestCase):
         self.attempt_repository = Mock(spec=AttemptRepository)
         self.attempt_repository.update.side_effect = lambda attempt: attempt
         self.challenge_repository = Mock(spec=ChallengeRepository)
+        self.submission_repository = Mock(spec=SubmissionRepository)
         self.transaction_manager = Mock(spec=TransactionManager)
         self.transaction_manager.transaction.side_effect = nullcontext
         self.now = datetime(2026, 10, 13, 12, tzinfo=timezone.utc)
         self.attempt_id = uuid4()
+        self.submission_id = uuid4()
+        self.submission_repository.get_by_id.side_effect = (
+            lambda submission_id: Submission(
+                id=submission_id,
+                attempt_id=self.attempt_id,
+                level_id="single-term-search",
+                sequence_number=1,
+                status=SubmissionStatus.RECEIVED,
+                created_at=self.now,
+                started_at=None,
+                completed_at=None,
+            )
+        )
         self.service = AttemptService(
             attempt_repository=self.attempt_repository,
             challenge_repository=self.challenge_repository,
+            submission_repository=self.submission_repository,
             transaction_manager=self.transaction_manager,
             clock=lambda: self.now,
             id_factory=lambda: self.attempt_id,
@@ -222,6 +239,7 @@ class AttemptServiceTests(unittest.TestCase):
             timed_out=False,
             passed_count=5,
             failed_count=0,
+            submission_id=self.submission_id,
         )
 
         with self.assertRaises(AttemptLevelNotActive):
@@ -239,6 +257,7 @@ class AttemptServiceTests(unittest.TestCase):
             timed_out=False,
             passed_count=4,
             failed_count=0,
+            submission_id=self.submission_id,
         )
         attempt = self._attempt()
         self.attempt_repository.get_by_id.return_value = attempt
@@ -262,6 +281,7 @@ class AttemptServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(result.attempt.active_level_id, "single-term-search")
+        self.assertIsNone(result.attempt.levels[0].latest_passed_submission_id)
         saved_attempt = self.attempt_repository.update.call_args.args[0]
 
         self.assertEqual(
@@ -276,6 +296,7 @@ class AttemptServiceTests(unittest.TestCase):
             timed_out=False,
             passed_count=5,
             failed_count=0,
+            submission_id=self.submission_id,
         )
         attempt = self._attempt()
         self.attempt_repository.get_by_id.return_value = attempt
@@ -301,6 +322,10 @@ class AttemptServiceTests(unittest.TestCase):
         self.assertEqual(
             result.attempt.levels[0].completed_at,
             self.now,
+        )
+        self.assertEqual(
+            result.attempt.levels[0].latest_passed_submission_id,
+            self.submission_id,
         )
 
         self.assertEqual(
@@ -332,6 +357,7 @@ class AttemptServiceTests(unittest.TestCase):
             timed_out=False,
             passed_count=5,
             failed_count=0,
+            submission_id=self.submission_id,
         )
         attempt = self._attempt()
         self.attempt_repository.get_by_id.return_value = attempt
@@ -361,6 +387,10 @@ class AttemptServiceTests(unittest.TestCase):
         self.assertEqual(
             result.attempt.levels[0].status,
             LevelProgressStatus.COMPLETED,
+        )
+        self.assertEqual(
+            result.attempt.levels[0].latest_passed_submission_id,
+            self.submission_id,
         )
         self.assertEqual(
             result.attempt.levels[1].status,
