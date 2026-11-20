@@ -17,7 +17,7 @@ class InvalidPythonSource(ValueError):
     pass
 
 
-class PythonChangeImpactAnalyzer:
+class PythonAstChangeImpactAnalyzer:
     def analyze(
         self,
         previous: SourceSnapshot,

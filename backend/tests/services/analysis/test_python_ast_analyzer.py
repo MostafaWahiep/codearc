@@ -1,15 +1,15 @@
 import unittest
 
 from app.domain.submission import SourceFile, SourceSnapshot
-from app.services.python_change_analyzer import (
+from app.services.analysis.python_ast_analyzer import (
     InvalidPythonSource,
-    PythonChangeImpactAnalyzer,
+    PythonAstChangeImpactAnalyzer,
 )
 
 
-class PythonChangeImpactAnalyzerTests(unittest.TestCase):
+class PythonAstChangeImpactAnalyzerTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.analyzer = PythonChangeImpactAnalyzer()
+        self.analyzer = PythonAstChangeImpactAnalyzer()
 
     def test_identical_snapshots_have_no_change_impact(self) -> None:
         snapshot = self._snapshot(
