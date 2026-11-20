@@ -34,6 +34,32 @@ export interface VisibleLevelDto {
 	designFeedback: string | null;
 }
 
+export interface ModifiedMethodImpactDto {
+	qualifiedName: string;
+	linesAdded: number;
+	linesRemoved: number;
+	changedLineCount: number;
+}
+
+export interface ChangedFileImpactDto {
+	path: string;
+	addedMethods: string[];
+	removedMethods: string[];
+	modifiedMethods: ModifiedMethodImpactDto[];
+}
+
+export interface ChangeImpactSummaryDto {
+	changedFileCount: number;
+	modifiedMethodCount: number;
+	changedLineCount: number;
+}
+
+export interface LevelChangeImpactDto {
+	levelId: string;
+	summary: ChangeImpactSummaryDto;
+	files: ChangedFileImpactDto[];
+}
+
 export type PublicTestCategory = 'current' | 'regression';
 
 export interface PublicTestFileDto {

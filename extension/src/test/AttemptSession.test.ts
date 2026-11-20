@@ -481,6 +481,9 @@ function createBackendClient(): BackendClient {
 		getAttempt: async () => openedAttempt().attempt,
 		getVisibleLevel: async (_attemptId, levelId) =>
 			visibleLevel(levelId, 'active'),
+		getLevelChangeImpact: async () => {
+			throw new Error('Not implemented by this test fake.');
+		},
 		getVisibleTests: async () => ({ runner: 'pytest', files: [] }),
 		submitTestResults: async () => ({
 			outcome: 'tests_failed',

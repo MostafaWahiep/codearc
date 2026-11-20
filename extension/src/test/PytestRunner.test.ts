@@ -192,6 +192,7 @@ function createBackendClient(bundle: PublicTestBundleDto): BackendClient {
 		startAttempt: async () => { throw new Error('Not used'); },
 		getAttempt: async () => { throw new Error('Not used'); },
 		getVisibleLevel: async () => { throw new Error('Not used'); },
+		getLevelChangeImpact: async () => { throw new Error('Not used'); },
 		getVisibleTests: async () => bundle,
 		submitTestResults: async () => { throw new Error('Not used'); },
 		createSubmission: async () => { throw new Error('Not used'); },

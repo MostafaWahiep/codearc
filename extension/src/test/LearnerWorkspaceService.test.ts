@@ -469,6 +469,7 @@ function createBackendClient(
 		startAttempt: async () => { throw new Error('Not used'); },
 		getAttempt: async () => { throw new Error('Not used'); },
 		getVisibleLevel: async () => { throw new Error('Not used'); },
+		getLevelChangeImpact: async () => { throw new Error('Not used'); },
 		getVisibleTests: async () => ({ runner: 'pytest', files: [] }),
 		submitTestResults: async () => { throw new Error('Not used'); },
 		createSubmission: async () => { throw new Error('Not used'); },

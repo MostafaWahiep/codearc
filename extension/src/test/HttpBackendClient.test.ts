@@ -152,6 +152,97 @@ suite('HttpBackendClient', () => {
 		);
 	});
 
+	test('loads and validates change impact for a completed level', async () => {
+		const calls: Array<{ url: string; init?: RequestInit }> = [];
+		const client = createClient(async (url, init) => {
+			calls.push({ url, init });
+			return jsonResponse(changeImpactResponse('prefix search'));
+		});
+
+		const impact = await client.getLevelChangeImpact(
+			'22222222-2222-4222-8222-222222222222',
+			'prefix search',
+		);
+
+		assert.strictEqual(impact.summary.changedFileCount, 1);
+		assert.strictEqual(impact.summary.modifiedMethodCount, 1);
+		assert.strictEqual(impact.summary.changedLineCount, 4);
+		assert.deepStrictEqual(
+			impact.files[0].addedMethods,
+			['SearchEngine.search_prefix'],
+		);
+		assert.strictEqual(
+			impact.files[0].modifiedMethods[0].qualifiedName,
+			'SearchEngine.add_document',
+		);
+		assert.strictEqual(
+			calls[0].url,
+			`${backendUrl}/attempts/22222222-2222-4222-8222-222222222222/levels/prefix%20search/change-impact`,
+		);
+		assert.strictEqual(calls[0].init?.method, 'GET');
+	});
+
+	test('rejects malformed change-impact responses', async () => {
+		const response = changeImpactResponse();
+		const files = response.files as Array<Record<string, unknown>>;
+		const methods = files[0].modifiedMethods as Array<Record<string, unknown>>;
+		methods[0].linesAdded = -1;
+		const client = createClient(async () => jsonResponse(response));
+
+		await assert.rejects(
+			client.getLevelChangeImpact(
+				'22222222-2222-4222-8222-222222222222',
+				'prefix-search',
+			),
+			(error: unknown) => {
+				assert.ok(error instanceof InvalidBackendResponseError);
+				assert.match(
+					error.message,
+					/response\.files\[0\]\.modifiedMethods\[0\]\.linesAdded/,
+				);
+				return true;
+			},
+		);
+	});
+
+	test('surfaces unavailable change impact as a server response error', async () => {
+		const client = createClient(async () => jsonResponse(
+			{ message: 'The first level has no previous level to compare.' },
+			409,
+		));
+
+		await assert.rejects(
+			client.getLevelChangeImpact(
+				'22222222-2222-4222-8222-222222222222',
+				'single-term-search',
+			),
+			(error: unknown) => {
+				assert.ok(error instanceof BackendResponseError);
+				assert.strictEqual(error.status, 409);
+				assert.match(error.message, /no previous level/);
+				return true;
+			},
+		);
+	});
+
+	test('reports connection failures while loading change impact', async () => {
+		const client = createClient(async () => {
+			throw new Error('connect ECONNREFUSED');
+		});
+
+		await assert.rejects(
+			client.getLevelChangeImpact(
+				'22222222-2222-4222-8222-222222222222',
+				'prefix-search',
+			),
+			(error: unknown) => {
+				assert.ok(error instanceof BackendConnectionError);
+				assert.match(error.message, /Make sure the backend is running/);
+				return true;
+			},
+		);
+	});
+
 	test('loads starter files for an exact challenge release', async () => {
 		const calls: Array<{ url: string; init?: RequestInit }> = [];
 		const client = createClient(async (url, init) => {
@@ -452,5 +543,33 @@ function visibleLevelResponse(): Record<string, unknown> {
 			},
 		],
 		designFeedback: null,
+	};
+}
+
+function changeImpactResponse(
+	levelId = 'prefix-search',
+): Record<string, unknown> {
+	return {
+		levelId,
+		summary: {
+			changedFileCount: 1,
+			modifiedMethodCount: 1,
+			changedLineCount: 4,
+		},
+		files: [
+			{
+				path: 'search_engine.py',
+				addedMethods: ['SearchEngine.search_prefix'],
+				removedMethods: [],
+				modifiedMethods: [
+					{
+						qualifiedName: 'SearchEngine.add_document',
+						linesAdded: 3,
+						linesRemoved: 1,
+						changedLineCount: 4,
+					},
+				],
+			},
+		],
 	};
 }

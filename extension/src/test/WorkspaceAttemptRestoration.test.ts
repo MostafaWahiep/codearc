@@ -101,6 +101,9 @@ function createBackendClient(): BackendClient {
 			sections: [],
 			designFeedback: null,
 		}),
+		getLevelChangeImpact: async () => {
+			throw new Error('Not used');
+		},
 		getVisibleTests: async () => ({ runner: 'pytest', files: [] }),
 		submitTestResults: async () => {
 			throw new Error('Not used');

@@ -3,6 +3,7 @@ import type {
 	AttemptSummaryDto,
 	ChallengeSummaryDto,
 	VisibleLevelDto,
+	LevelChangeImpactDto,
 	PublicTestBundleDto,
 	TestSubmission,
 	TestSubmissionResultDto,
@@ -30,6 +31,11 @@ export interface BackendClient {
 		attemptId: string,
 		levelId: string,
 	): Promise<VisibleLevelDto>;
+
+	getLevelChangeImpact(
+		attemptId: string,
+		levelId: string,
+	): Promise<LevelChangeImpactDto>;
 
 	getVisibleTests(attemptId: string): Promise<PublicTestBundleDto>;
 

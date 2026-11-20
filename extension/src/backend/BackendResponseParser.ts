@@ -8,6 +8,7 @@ import type {
 	LevelProgressDto,
 	LevelProgressStatus,
 	LevelSectionDto,
+	LevelChangeImpactDto,
 	VisibleLevelDto,
 	PublicTestBundleDto,
 	PublicTestCategory,
@@ -147,6 +148,37 @@ export function parseVisibleLevel(
 	});
 }
 
+export function parseLevelChangeImpact(
+	value: unknown,
+	method: string,
+	path: string,
+): LevelChangeImpactDto {
+	return parseResponse(method, path, () => {
+		const impact = expectObject(value, 'response');
+		const summary = expectObject(impact.summary, 'response.summary');
+		return {
+			levelId: expectString(impact.levelId, 'response.levelId'),
+			summary: {
+				changedFileCount: expectNonNegativeInteger(
+					summary.changedFileCount,
+					'response.summary.changedFileCount',
+				),
+				modifiedMethodCount: expectNonNegativeInteger(
+					summary.modifiedMethodCount,
+					'response.summary.modifiedMethodCount',
+				),
+				changedLineCount: expectNonNegativeInteger(
+					summary.changedLineCount,
+					'response.summary.changedLineCount',
+				),
+			},
+			files: expectArray(impact.files, 'response.files').map(
+				(value, index) => parseChangedFileImpact(value, index),
+			),
+		};
+	});
+}
+
 export function parsePublicTestBundle(
 	value: unknown,
 	method: string,
@@ -265,6 +297,56 @@ function parseLevelSection(value: unknown, index: number): LevelSectionDto {
 			`${location}.display`,
 		),
 	};
+}
+
+function parseChangedFileImpact(
+	value: unknown,
+	index: number,
+): LevelChangeImpactDto['files'][number] {
+	const location = `response.files[${index}]`;
+	const file = expectObject(value, location);
+	return {
+		path: expectString(file.path, `${location}.path`),
+		addedMethods: parseStringArray(
+			file.addedMethods,
+			`${location}.addedMethods`,
+		),
+		removedMethods: parseStringArray(
+			file.removedMethods,
+			`${location}.removedMethods`,
+		),
+		modifiedMethods: expectArray(
+			file.modifiedMethods,
+			`${location}.modifiedMethods`,
+		).map((value, methodIndex) => {
+			const methodLocation = `${location}.modifiedMethods[${methodIndex}]`;
+			const method = expectObject(value, methodLocation);
+			return {
+				qualifiedName: expectString(
+					method.qualifiedName,
+					`${methodLocation}.qualifiedName`,
+				),
+				linesAdded: expectNonNegativeInteger(
+					method.linesAdded,
+					`${methodLocation}.linesAdded`,
+				),
+				linesRemoved: expectNonNegativeInteger(
+					method.linesRemoved,
+					`${methodLocation}.linesRemoved`,
+				),
+				changedLineCount: expectNonNegativeInteger(
+					method.changedLineCount,
+					`${methodLocation}.changedLineCount`,
+				),
+			};
+		}),
+	};
+}
+
+function parseStringArray(value: unknown, location: string): string[] {
+	return expectArray(value, location).map((item, index) => (
+		expectString(item, `${location}[${index}]`)
+	));
 }
 
 function parseLevelProgress(value: unknown, index: number): LevelProgressDto {

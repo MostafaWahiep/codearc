@@ -9,6 +9,7 @@ import {
 	parseAttemptSummaries,
 	parseChallengeSummaries,
 	parseVisibleLevel,
+	parseLevelChangeImpact,
 	parsePublicTestBundle,
 	parseTestResult,
 	parseStarterFiles,
@@ -19,6 +20,7 @@ import type {
 	AttemptSummaryDto,
 	ChallengeSummaryDto,
 	VisibleLevelDto,
+	LevelChangeImpactDto,
 	PublicTestBundleDto,
 	TestSubmission,
 	TestSubmissionResultDto,
@@ -91,6 +93,26 @@ export class HttpBackendClient implements BackendClient {
 		const path = `/attempts/${encodeURIComponent(attemptId)}/levels/${encodeURIComponent(levelId)}`;
 		const response = await this.request(method, path);
 		return parseVisibleLevel(response, method, path);
+	}
+
+	public async getLevelChangeImpact(
+		attemptId: string,
+		levelId: string,
+	): Promise<LevelChangeImpactDto> {
+		const method = 'GET';
+		const path = `/attempts/${encodeURIComponent(attemptId)}/levels/${encodeURIComponent(levelId)}/change-impact`;
+		const response = await this.request(method, path);
+		const impact = parseLevelChangeImpact(response, method, path);
+
+		if (impact.levelId !== levelId) {
+			throw new InvalidBackendResponseError(
+				method,
+				path,
+				'the change impact does not match the requested level',
+			);
+		}
+
+		return impact;
 	}
 
 	public async getVisibleTests(attemptId: string): Promise<PublicTestBundleDto> {
