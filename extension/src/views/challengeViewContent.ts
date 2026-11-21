@@ -9,7 +9,11 @@ import {
 	type ChallengeCatalogSnapshot,
 } from '../application/ChallengeCatalog';
 import { ChallengeSection } from '../application/ChallengeSection';
-import type { LevelSectionDto } from '../backend/BackendTypes';
+import type {
+	ChangedFileImpactDto,
+	LevelChangeImpactDto,
+	LevelSectionDto,
+} from '../backend/BackendTypes';
 import { ChallengeViewAction } from './ChallengeViewAction';
 import type { MarkdownRenderer } from './MarkdownRenderer';
 import { renderBackendResults } from './challengeResultsView';
@@ -161,11 +165,23 @@ function renderProgress(snapshot: AttemptSessionSnapshot): string {
 }
 
 function renderTabs(snapshot: AttemptSessionSnapshot): string {
+	const stageNumber = snapshot.attempt.levels.findIndex(
+		(progress) => progress.levelId === snapshot.level.id,
+	) + 1;
+	const visibleSections = Object.values(ChallengeSection).filter(
+		(section) => section !== ChallengeSection.Changes || stageNumber > 1,
+	);
+
 	return `<nav class="tabs" role="tablist" aria-label="Challenge sections">
-		${Object.values(ChallengeSection).map((section) => {
+		${visibleSections.map((section) => {
 			const selected = snapshot.selectedSection === section;
-			const disabled = section === ChallengeSection.Design
-				&& snapshot.level.designFeedback === null;
+			const disabled = (
+				section === ChallengeSection.Changes
+				&& snapshot.level.status !== 'completed'
+			) || (
+				section === ChallengeSection.Design
+				&& snapshot.level.designFeedback === null
+			);
 			return `<button class="tab" type="button" role="tab" aria-selected="${String(selected)}" tabindex="${selected ? '0' : '-1'}" data-action="${ChallengeViewAction.SelectSection}" data-section="${escapeHtml(section)}" ${disabled ? 'disabled title="Unlocks after this stage is completed"' : ''}>${escapeHtml(section)}${disabled ? ' · Locked' : ''}</button>`;
 		}).join('')}
 	</nav>`;
@@ -196,6 +212,8 @@ async function renderAttemptSection(
 		}
 		case ChallengeSection.Results:
 			return renderBackendResults(snapshot);
+		case ChallengeSection.Changes:
+			return renderChangeImpact(snapshot);
 		case ChallengeSection.Design: {
 			if (snapshot.level.designFeedback === null) {
 				return `<section class="card locked"><span class="lock" aria-hidden="true">◇</span><div><strong>Design is locked</strong><p class="small muted">Complete this stage to reveal its design tradeoffs.</p></div></section>`;
@@ -203,16 +221,137 @@ async function renderAttemptSection(
 			const feedback = await markdownRenderer.render(
 				removeLeadingHeading(snapshot.level.designFeedback),
 			);
-			const currentStageAction = snapshot.attempt.status !== 'completed'
-				&& snapshot.level.id !== snapshot.attempt.activeLevelId
-				? `<div class="sticky-actions">
-					<button class="action" type="button" data-action="${ChallengeViewAction.CurrentStage}">Continue to current stage</button>
-				</div>`
-				: '';
+			const currentStageAction = renderAttemptLevelSelector(snapshot);
 			return `<section class="card"><p class="eyebrow">Design reflection</p><div class="markdown-content">${feedback}</div></section>
 				${currentStageAction}`;
 		}
 	}
+}
+
+function renderChangeImpact(snapshot: AttemptSessionSnapshot): string {
+	const stageNumber = snapshot.attempt.levels.findIndex(
+		(progress) => progress.levelId === snapshot.level.id,
+	) + 1;
+
+	if (snapshot.changeImpact.status === 'failed') {
+		return `<section class="card locked">
+			<span class="lock" aria-hidden="true">!</span>
+			<div><strong>Could not load code changes</strong>
+			<p class="small muted">${escapeHtml(snapshot.changeImpact.error)}</p>
+			<button class="action action-secondary" type="button" data-action="${ChallengeViewAction.RetryChangeImpact}">Retry</button></div>
+		</section>`;
+	}
+
+	if (snapshot.changeImpact.status !== 'ready') {
+		return `<section class="card loading-card">
+			<div class="spinner" aria-hidden="true"></div>
+			<div><strong>Loading code changes…</strong><p class="small muted">Comparing this completed stage with the previous one.</p></div>
+		</section>`;
+	}
+
+	const impact = snapshot.changeImpact.value;
+	const previousLevel = snapshot.attempt.levels[stageNumber - 2];
+	const currentLevel = snapshot.attempt.levels[stageNumber - 1];
+	const currentStageAction = renderAttemptLevelSelector(snapshot);
+	return `<section class="card impact-view" aria-labelledby="impact-title">
+		<div class="impact-heading">
+			<p class="eyebrow">Code changes</p>
+			<h2 id="impact-title"><span>${escapeHtml(formatLevelName(previousLevel.levelId))}</span><span class="impact-arrow" aria-hidden="true">→</span><span>${escapeHtml(formatLevelName(currentLevel.levelId))}</span></h2>
+			<p class="impact-stage-label">Stage ${stageNumber - 1} → Stage ${stageNumber}</p>
+		</div>
+		<p class="impact-lede">The new requirement affected:</p>
+		${renderImpactSummary(impact)}
+		<p class="impact-legend" aria-label="Line-change legend"><span><strong class="impact-legend-added">+</strong> added lines</span><span><strong class="impact-legend-removed">−</strong> removed lines</span></p>
+		<div class="impact-files">
+			${impact.files.length === 0
+				? '<p class="small muted">No source files changed.</p>'
+				: impact.files.map(renderImpactFile).join('')}
+		</div>
+		<div class="impact-interpretation">
+			<strong>This is not a score.</strong>
+			<p>A larger change is not automatically worse. Consider why this requirement made these methods change together.</p>
+		</div>
+		${currentStageAction}
+	</section>`;
+}
+
+function renderImpactSummary(impact: LevelChangeImpactDto): string {
+	return `<dl class="impact-summary">
+		<div><dt>${impact.summary.changedFileCount}</dt><dd>${impact.summary.changedFileCount === 1 ? 'file' : 'files'} changed</dd></div>
+		<div><dt>${impact.summary.modifiedMethodCount}</dt><dd>existing ${impact.summary.modifiedMethodCount === 1 ? 'method' : 'methods'} modified</dd></div>
+		<div><dt>${impact.summary.changedLineCount}</dt><dd>${impact.summary.changedLineCount === 1 ? 'line' : 'lines'} touched inside them</dd></div>
+	</dl>`;
+}
+
+function renderImpactFile(file: ChangedFileImpactDto): string {
+	const modifiedCount = file.modifiedMethods.length;
+	return `<details class="impact-file" open>
+		<summary class="impact-file-heading">
+			<span class="impact-file-name"><span class="impact-file-chevron" aria-hidden="true"></span><code>${escapeHtml(file.path)}</code></span>
+			<span class="impact-file-meta">${modifiedCount} existing ${modifiedCount === 1 ? 'method' : 'methods'} modified</span>
+		</summary>
+		<div class="impact-file-content">
+		${modifiedCount === 0
+			? '<p class="small muted">No existing methods were modified in this file.</p>'
+			: `<ul class="impact-methods">
+				${file.modifiedMethods.map((method) => `<li>
+					<div class="impact-method-name"><span aria-hidden="true">ƒ</span><code>${escapeHtml(method.qualifiedName)}</code></div>
+					<div class="impact-deltas" aria-label="${method.linesAdded} lines added and ${method.linesRemoved} lines removed">
+						<span class="impact-added">+${method.linesAdded}</span>
+						<span class="impact-removed">−${method.linesRemoved}</span>
+					</div>
+				</li>`).join('')}
+			</ul>`}
+		${renderMethodInventory(
+			'New methods',
+			'Excluded from the existing-method metric',
+			file.addedMethods,
+			'added',
+		)}
+		${renderMethodInventory(
+			'Removed code',
+			'Reported separately from modified methods',
+			file.removedMethods,
+			'removed',
+		)}
+		</div>
+	</details>`;
+}
+
+function renderMethodInventory(
+	label: string,
+	note: string,
+	methods: string[],
+	kind: 'added' | 'removed',
+): string {
+	if (methods.length === 0) {
+		return '';
+	}
+
+	const marker = kind === 'added' ? '+' : '−';
+	return `<section class="impact-inventory impact-inventory-${kind}">
+		<div class="impact-inventory-heading"><strong>${label}</strong><span>${note}</span></div>
+		<ul>${methods.map((method) => `<li><span aria-hidden="true">${marker}</span><code>${escapeHtml(method)}</code></li>`).join('')}</ul>
+	</section>`;
+}
+
+function formatLevelName(levelId: string): string {
+	return levelId
+		.split('-')
+		.map((word) => word.length > 0
+			? `${word[0].toUpperCase()}${word.slice(1)}`
+			: word)
+		.join(' ');
+}
+
+function renderAttemptLevelSelector(snapshot: AttemptSessionSnapshot): string {
+	return snapshot.attempt.status !== 'completed'
+		&& snapshot.level.id !== snapshot.attempt.activeLevelId
+		? `<div class="sticky-actions">
+			<button class="action" type="button" data-action="${ChallengeViewAction.CurrentStage}">Continue to current stage</button>
+		</div>`
+		: '';
+
 }
 
 async function renderLevelSection(

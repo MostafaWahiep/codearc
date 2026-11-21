@@ -8,6 +8,7 @@ import type { SubmissionSourceProvider } from '../application/SubmissionSourcePr
 import type { BackendClient } from '../backend/BackendClient';
 import type {
 	AttemptDto,
+	LevelChangeImpactDto,
 	SubmissionSourceFile,
 	TestSubmission,
 	TestSubmissionResultDto,
@@ -431,6 +432,87 @@ suite('AttemptSession', () => {
 		assert.strictEqual(snapshot.selectedSection, ChallengeSection.Build);
 	});
 
+	test('loads and caches change impact for a completed level', async () => {
+		const pending = deferred<LevelChangeImpactDto>();
+		let requestCount = 0;
+		const backendClient = createBackendClient();
+		backendClient.getVisibleLevel = async (_attemptId, levelId) =>
+			visibleLevel(levelId, 'completed');
+		backendClient.getLevelChangeImpact = async () => {
+			requestCount += 1;
+			return pending.promise;
+		};
+		const session = createAttemptSession(backendClient);
+		session.open(challengeSummary(), attemptOnPhraseStage());
+		await session.selectLevel('prefix-search');
+		session.selectSection(ChallengeSection.Changes);
+
+		const load = session.loadChangeImpact();
+
+		assert.strictEqual(session.getSnapshot()?.changeImpact.status, 'loading');
+		pending.resolve(changeImpact());
+		const ready = await load;
+		assert.strictEqual(ready.changeImpact.status, 'ready');
+
+		if (ready.changeImpact.status !== 'ready') {
+			assert.fail('Expected loaded change impact.');
+		}
+		assert.strictEqual(ready.changeImpact.value.summary.changedLineCount, 4);
+		ready.changeImpact.value.files[0].modifiedMethods[0].linesAdded = 99;
+		const storedImpact = session.getSnapshot()?.changeImpact;
+		assert.strictEqual(
+			storedImpact?.status === 'ready'
+				? storedImpact.value.files[0].modifiedMethods[0].linesAdded
+				: undefined,
+			3,
+		);
+
+		session.selectSection(ChallengeSection.Build);
+		session.selectSection(ChallengeSection.Changes);
+		const cached = await session.loadChangeImpact();
+		assert.strictEqual(cached.changeImpact.status, 'ready');
+		assert.strictEqual(requestCount, 1);
+	});
+
+	test('keeps change-impact failures retryable', async () => {
+		let shouldFail = true;
+		const backendClient = createBackendClient();
+		backendClient.getVisibleLevel = async (_attemptId, levelId) =>
+			visibleLevel(levelId, 'completed');
+		backendClient.getLevelChangeImpact = async () => {
+			if (shouldFail) {
+				throw new Error('The CodeArc server is unavailable.');
+			}
+			return changeImpact();
+		};
+		const session = createAttemptSession(backendClient);
+		session.open(challengeSummary(), attemptOnPhraseStage());
+		await session.selectLevel('prefix-search');
+		session.selectSection(ChallengeSection.Changes);
+
+		const failed = await session.loadChangeImpact();
+
+		assert.strictEqual(failed.changeImpact.status, 'failed');
+		assert.match(
+			failed.changeImpact.status === 'failed' ? failed.changeImpact.error : '',
+			/server is unavailable/,
+		);
+
+		shouldFail = false;
+		const ready = await session.loadChangeImpact(true);
+		assert.strictEqual(ready.changeImpact.status, 'ready');
+	});
+
+	test('rejects code changes for an incomplete level', () => {
+		const session = createAttemptSession();
+		session.open(challengeSummary(), openedAttempt());
+
+		assert.throws(
+			() => session.selectSection(ChallengeSection.Changes),
+			/Complete this stage/,
+		);
+	});
+
 	test('rejects future levels before making a backend request', async () => {
 		let requestCount = 0;
 		const backendClient = createBackendClient();
@@ -560,6 +642,13 @@ function openedAttempt(): OpenedAttempt {
 	};
 }
 
+function attemptOnPhraseStage(): OpenedAttempt {
+	return {
+		attempt: completedLevelResult().attempt,
+		level: visibleLevel('phrase-search', 'active'),
+	};
+}
+
 function visibleLevel(
 	id: string,
 	status: 'active' | 'completed',
@@ -603,6 +692,32 @@ function testEvidence(
 		codeHash: 'abc123',
 		durationMilliseconds: 40,
 		...overrides,
+	};
+}
+
+function changeImpact(): LevelChangeImpactDto {
+	return {
+		levelId: 'prefix-search',
+		summary: {
+			changedFileCount: 1,
+			modifiedMethodCount: 1,
+			changedLineCount: 4,
+		},
+		files: [
+			{
+				path: 'search_engine.py',
+				addedMethods: ['SearchEngine.search_prefix'],
+				removedMethods: [],
+				modifiedMethods: [
+					{
+						qualifiedName: 'SearchEngine.add_document',
+						linesAdded: 3,
+						linesRemoved: 1,
+						changedLineCount: 4,
+					},
+				],
+			},
+		],
 	};
 }
 

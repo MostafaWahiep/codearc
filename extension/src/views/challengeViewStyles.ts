@@ -106,7 +106,8 @@ button.progress-step:hover { filter: brightness(1.25); }
 
 .tabs {
 	display: grid;
-	grid-template-columns: repeat(3, 1fr);
+	grid-auto-columns: 1fr;
+	grid-auto-flow: column;
 	margin: 0 -4px 14px;
 	border-bottom: 1px solid var(--vscode-panel-border);
 }
@@ -272,6 +273,232 @@ code {
 
 .action-quiet:hover:not(:disabled) { background: var(--vscode-list-hoverBackground); }
 .action:disabled { opacity: 0.65; cursor: wait; }
+
+.impact-heading {
+	display: grid;
+	gap: 3px;
+}
+.impact-heading h2 {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 7px;
+	margin: 1px 0 0;
+	font-size: 17px;
+}
+.impact-arrow {
+	color: var(--vscode-textLink-foreground);
+	font-weight: 400;
+}
+.impact-stage-label {
+	margin: 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 10px;
+}
+.impact-lede {
+	margin: 15px 0 6px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 11px;
+}
+.impact-summary {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	margin: 0;
+	overflow: hidden;
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 5px;
+	background: var(--vscode-sideBar-background);
+}
+.impact-summary div {
+	display: grid;
+	align-content: start;
+	min-width: 0;
+	padding: 9px 10px;
+	border-right: 1px solid var(--vscode-panel-border);
+}
+.impact-summary div:last-child { border-right: 0; }
+.impact-summary dt {
+	font-size: 17px;
+	font-weight: 700;
+	line-height: 1;
+}
+.impact-summary dd {
+	margin: 5px 0 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 9px;
+	line-height: 1.3;
+}
+.impact-legend {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 3px 10px;
+	margin: 6px 0 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 9px;
+}
+.impact-legend strong {
+	font-family: var(--vscode-editor-font-family);
+	font-size: 11px;
+}
+.impact-legend-added { color: var(--vscode-gitDecoration-addedResourceForeground, var(--vscode-testing-iconPassed)); }
+.impact-legend-removed { color: var(--vscode-gitDecoration-deletedResourceForeground, var(--vscode-testing-iconFailed)); }
+.impact-files { margin-top: 16px; }
+.impact-file {
+	padding-top: 11px;
+	border-top: 1px solid var(--vscode-panel-border);
+}
+.impact-file + .impact-file { margin-top: 12px; }
+.impact-file-heading {
+	display: grid;
+	gap: 3px;
+	padding: 2px 0 7px;
+	cursor: pointer;
+	list-style: none;
+}
+.impact-file-heading::-webkit-details-marker { display: none; }
+.impact-file-name {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: 7px;
+}
+.impact-file-chevron::before {
+	display: inline-block;
+	color: var(--vscode-descriptionForeground);
+	content: '▸';
+	font-size: 17px;
+	font-weight: 700;
+	line-height: 1;
+}
+.impact-file[open] .impact-file-chevron::before { content: '▾'; }
+.impact-file-heading code {
+	padding: 0;
+	background: transparent;
+	font-size: 13px;
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+.impact-file-heading span {
+	color: var(--vscode-descriptionForeground);
+	font-size: 10px;
+}
+.impact-file-heading .impact-file-meta { padding-left: 18px; }
+.impact-file-heading .impact-file-name code { color: var(--vscode-foreground); }
+.impact-file-heading:hover .impact-file-name code { color: var(--vscode-textLink-foreground); }
+.impact-file-heading:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+.impact-file-content { padding-left: 17px; }
+.impact-methods {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.impact-methods li {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 0;
+	border-bottom: 1px solid var(--vscode-panel-border);
+	font-size: 11px;
+}
+.impact-methods li:last-child { border-bottom: 0; }
+.impact-method-name {
+	display: flex;
+	min-width: 0;
+	align-items: baseline;
+	gap: 6px;
+}
+.impact-method-name > span {
+	color: var(--vscode-symbolIcon-methodForeground);
+	font-family: var(--vscode-editor-font-family);
+}
+.impact-method-name code {
+	min-width: 0;
+	padding: 0;
+	background: transparent;
+	overflow-wrap: anywhere;
+}
+.impact-deltas {
+	display: flex;
+	gap: 4px;
+	font-family: var(--vscode-editor-font-family);
+	font-size: 10px;
+}
+.impact-deltas span {
+	min-width: 24px;
+	padding: 1px 4px;
+	border-radius: 3px;
+	text-align: center;
+}
+.impact-added {
+	color: var(--vscode-gitDecoration-addedResourceForeground, var(--vscode-testing-iconPassed));
+	background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground, var(--vscode-testing-iconPassed)) 12%, transparent);
+}
+.impact-removed {
+	color: var(--vscode-gitDecoration-deletedResourceForeground, var(--vscode-testing-iconFailed));
+	background: color-mix(in srgb, var(--vscode-gitDecoration-deletedResourceForeground, var(--vscode-testing-iconFailed)) 12%, transparent);
+}
+.impact-inventory {
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px dashed var(--vscode-panel-border);
+	font-size: 10px;
+}
+.impact-inventory-heading {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 2px 8px;
+}
+.impact-inventory-heading span { color: var(--vscode-descriptionForeground); }
+.impact-inventory ul {
+	display: grid;
+	gap: 4px;
+	margin: 6px 0 0;
+	padding: 0;
+	list-style: none;
+}
+.impact-inventory li {
+	display: flex;
+	min-width: 0;
+	align-items: baseline;
+	gap: 6px;
+}
+.impact-inventory li > span { font-family: var(--vscode-editor-font-family); }
+.impact-inventory-added li > span { color: var(--vscode-gitDecoration-addedResourceForeground, var(--vscode-testing-iconPassed)); }
+.impact-inventory-removed li > span { color: var(--vscode-gitDecoration-deletedResourceForeground, var(--vscode-testing-iconFailed)); }
+.impact-inventory code {
+	padding: 0;
+	background: transparent;
+	overflow-wrap: anywhere;
+}
+.impact-interpretation {
+	margin-top: 16px;
+	padding: 10px 11px;
+	border-left: 3px solid var(--vscode-focusBorder);
+	background: var(--vscode-textBlockQuote-background);
+	font-size: 11px;
+}
+.impact-interpretation p { margin: 4px 0 0; }
+
+@media (max-width: 300px) {
+	.impact-summary { grid-template-columns: 1fr; }
+	.impact-summary div {
+		grid-template-columns: 24px 1fr;
+		align-items: baseline;
+		gap: 6px;
+		border-right: 0;
+		border-bottom: 1px solid var(--vscode-panel-border);
+	}
+	.impact-summary div:last-child { border-bottom: 0; }
+	.impact-summary dd { margin-top: 0; }
+	.impact-methods li { grid-template-columns: 1fr; }
+	.impact-deltas { padding-left: 18px; }
+}
 
 .sticky-actions {
 	display: grid;

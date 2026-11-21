@@ -70,6 +70,7 @@ suite('Challenge view rendering', () => {
 		assert.match(html, /data-level-id="prefix-search"/);
 		assert.doesNotMatch(html, /data-level-id="phrase-search"/);
 		assert.match(html, /Stage 3 is locked/);
+		assert.match(html, /Changes · Locked/);
 		assert.match(html, /Design · Locked/);
 		assert.match(html, /Open challenge folder/);
 		assert.match(html, /Run checks/);
@@ -325,6 +326,109 @@ suite('Challenge view rendering', () => {
 		assert.doesNotMatch(html, /Design is locked/);
 	});
 
+	test('renders backend change impact for a completed level', async () => {
+		const snapshot = createAttemptSessionSnapshot();
+		snapshot.level.status = 'completed';
+		snapshot.attempt.levels[1].status = 'completed';
+		snapshot.selectedSection = ChallengeSection.Changes;
+		snapshot.changeImpact = { status: 'ready', value: {
+			levelId: 'prefix-search',
+			summary: {
+				changedFileCount: 1,
+				modifiedMethodCount: 1,
+				changedLineCount: 4,
+			},
+			files: [{
+				path: 'search_engine.py',
+				addedMethods: ['SearchEngine.search_prefix'],
+				removedMethods: [],
+				modifiedMethods: [{
+					qualifiedName: 'SearchEngine.add_document',
+					linesAdded: 3,
+					linesRemoved: 1,
+					changedLineCount: 4,
+				}],
+			}],
+		} };
+
+		const html = await renderChallenge(
+			markdownRenderer,
+			createCatalogSnapshot(),
+			undefined,
+			snapshot,
+		);
+
+		assert.match(html, /Code changes/);
+		assert.match(html, /Single Term Search/);
+		assert.match(html, /Prefix Search/);
+		assert.match(html, /Stage 1 → Stage 2/);
+		assert.match(html, /The new requirement affected/);
+		assert.match(html, /1<\/dt><dd>file changed/);
+		assert.match(html, /1<\/dt><dd>existing method modified/);
+		assert.match(html, /4<\/dt><dd>lines touched inside them/);
+		assert.match(html, /search_engine\.py/);
+		assert.match(html, /<details class="impact-file" open>/);
+		assert.match(html, /<summary class="impact-file-heading">/);
+		assert.match(html, /class="impact-file-meta">1 existing method modified/);
+		assert.match(html, /SearchEngine\.add_document/);
+		assert.match(html, /impact-added">\+3/);
+		assert.match(html, /impact-removed">−1/);
+		assert.match(html, /added lines/);
+		assert.match(html, /removed lines/);
+		assert.match(html, /New methods/);
+		assert.match(html, /Excluded from the existing-method metric/);
+		assert.match(html, /SearchEngine\.search_prefix/);
+		assert.match(html, /This is not a score/);
+		assert.match(html, /larger change is not automatically worse/);
+		assert.doesNotMatch(html, /Prototype|Preview|Illustrative data/);
+	});
+
+	test('renders retryable change-impact errors', async () => {
+		const snapshot = createAttemptSessionSnapshot();
+		snapshot.level.status = 'completed';
+		snapshot.attempt.levels[1].status = 'completed';
+		snapshot.selectedSection = ChallengeSection.Changes;
+		snapshot.changeImpact = {
+			status: 'failed',
+			error: 'Server <offline>',
+		};
+
+		const html = await renderChallenge(
+			markdownRenderer,
+			createCatalogSnapshot(),
+			undefined,
+			snapshot,
+		);
+
+		assert.match(html, /Could not load code changes/);
+		assert.match(html, /Server &lt;offline&gt;/);
+		assert.match(html, /data-action="retryChangeImpact"/);
+		assert.match(html, />Retry</);
+	});
+
+	test('hides code changes for the first stage', async () => {
+		const snapshot = createAttemptSessionSnapshot();
+		snapshot.attempt.activeLevelId = 'single-term-search';
+		snapshot.attempt.levels = [snapshot.attempt.levels[0]];
+		snapshot.level = {
+			...snapshot.level,
+			id: 'single-term-search',
+			title: 'Single Term Search',
+			status: 'completed',
+		};
+		snapshot.selectedSection = ChallengeSection.Build;
+
+		const html = await renderChallenge(
+			markdownRenderer,
+			createCatalogSnapshot(),
+			undefined,
+			snapshot,
+		);
+
+		assert.doesNotMatch(html, /data-section="Changes"/);
+		assert.doesNotMatch(html, /Code changes/);
+	});
+
 	test('offers the backend current stage after design reflection', async () => {
 		const snapshot = createAttemptSessionSnapshot();
 		snapshot.level.status = 'completed';
@@ -482,5 +586,6 @@ function createAttemptSessionSnapshot(): AttemptSessionSnapshot {
 		testStatus: 'idle',
 		submissionStatus: 'idle',
 		submissionError: undefined,
+		changeImpact: { status: 'idle' },
 	};
 }

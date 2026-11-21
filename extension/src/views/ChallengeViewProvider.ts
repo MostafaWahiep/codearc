@@ -145,7 +145,14 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 					this.attemptSessionSnapshot = this.attemptSession.selectSection(
 						message.section,
 					);
+					if (message.section === ChallengeSection.Changes) {
+						await this.loadChangeImpact();
+						return;
+					}
 					break;
+				case ChallengeViewAction.RetryChangeImpact:
+					await this.loadChangeImpact(true);
+					return;
 				case ChallengeViewAction.SelectAttemptLevel:
 					this.attemptSessionSnapshot = await this.attemptSession.selectLevel(
 						message.levelId,
@@ -248,6 +255,14 @@ export class ChallengeViewProvider implements vscode.WebviewViewProvider {
 			throw new Error('Open an attempt before moving to the current stage.');
 		}
 		this.attemptSessionSnapshot = await this.attemptSession.moveToCurrentStage();
+		this.render();
+	}
+
+	private async loadChangeImpact(force = false): Promise<void> {
+		const load = this.attemptSession.loadChangeImpact(force);
+		this.attemptSessionSnapshot = this.attemptSession.getSnapshot();
+		this.render();
+		this.attemptSessionSnapshot = await load;
 		this.render();
 	}
 
@@ -377,6 +392,7 @@ type ViewMessage =
 			| ChallengeViewAction.RetryAttempts
 			| ChallengeViewAction.BackToCatalog
 			| ChallengeViewAction.RunChecks
+			| ChallengeViewAction.RetryChangeImpact
 			| ChallengeViewAction.OpenWorkspace
 			| ChallengeViewAction.SubmitSolution
 			| ChallengeViewAction.CurrentStage;

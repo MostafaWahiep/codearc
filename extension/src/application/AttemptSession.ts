@@ -2,6 +2,7 @@ import type { BackendClient } from '../backend/BackendClient';
 import type {
 	AttemptDto,
 	ChallengeSummaryDto,
+	LevelChangeImpactDto,
 	TestSubmission,
 	TestSubmissionResultDto,
 	VisibleLevelDto,
@@ -19,6 +20,11 @@ export type AttemptSubmissionStatus =
 	| 'submitting'
 	| 'accepted'
 	| 'rejected';
+export type ChangeImpactState =
+	| { status: 'idle' }
+	| { status: 'loading' }
+	| { status: 'ready'; value: LevelChangeImpactDto }
+	| { status: 'failed'; error: string };
 
 export interface AttemptSessionSnapshot {
 	challenge: ChallengeSummaryDto;
@@ -28,12 +34,14 @@ export interface AttemptSessionSnapshot {
 	testStatus: AttemptTestStatus;
 	submissionStatus: AttemptSubmissionStatus;
 	submissionError?: string;
+	changeImpact: ChangeImpactState;
 	latestTestEvidence?: TestEvidence;
 }
 
 export class AttemptSession {
 	private snapshot: AttemptSessionSnapshot | undefined;
 	private revision = 0;
+	private readonly changeImpactCache = new Map<string, LevelChangeImpactDto>();
 
 	public constructor(
 		private readonly backendClient: BackendClient,
@@ -56,6 +64,7 @@ export class AttemptSession {
 		);
 
 		this.revision += 1;
+		this.changeImpactCache.clear();
 		this.snapshot = {
 			challenge,
 			attempt: openedAttempt.attempt,
@@ -64,6 +73,7 @@ export class AttemptSession {
 			testStatus: 'idle',
 			submissionStatus: 'idle',
 			submissionError: undefined,
+			changeImpact: { status: 'idle' },
 		};
 		return this.getRequiredSnapshot();
 	}
@@ -81,6 +91,7 @@ export class AttemptSession {
 		);
 
 		if (revision === this.revision) {
+			const cachedImpact = this.changeImpactCache.get(level.id);
 			this.snapshot = {
 				...current,
 				level,
@@ -89,6 +100,9 @@ export class AttemptSession {
 				latestTestEvidence: undefined,
 				submissionStatus: 'idle',
 				submissionError: undefined,
+				changeImpact: cachedImpact
+					? { status: 'ready', value: cloneChangeImpact(cachedImpact) }
+					: { status: 'idle' },
 			};
 		}
 
@@ -137,6 +151,9 @@ export class AttemptSession {
 
 	public selectSection(section: ChallengeSection): AttemptSessionSnapshot {
 		const current = this.getRequiredSnapshot();
+		if (section === ChallengeSection.Changes) {
+			this.requireChangeImpactAvailable(current);
+		}
 		this.snapshot = {
 			...current,
 			selectedSection: section,
@@ -144,8 +161,77 @@ export class AttemptSession {
 		return this.getRequiredSnapshot();
 	}
 
+	public async loadChangeImpact(
+		force = false,
+	): Promise<AttemptSessionSnapshot> {
+		const current = this.getRequiredSnapshot();
+		this.requireChangeImpactAvailable(current);
+
+		if (current.changeImpact.status === 'loading') {
+			return current;
+		}
+
+		const levelId = current.level.id;
+		const cachedImpact = this.changeImpactCache.get(levelId);
+		if (cachedImpact && !force) {
+			this.snapshot = {
+				...current,
+				changeImpact: {
+					status: 'ready',
+					value: cloneChangeImpact(cachedImpact),
+				},
+			};
+			return this.getRequiredSnapshot();
+		}
+
+		const revision = this.revision;
+		this.snapshot = {
+			...current,
+			changeImpact: { status: 'loading' },
+		};
+
+		try {
+			const impact = await this.backendClient.getLevelChangeImpact(
+				current.attempt.id,
+				levelId,
+			);
+			if (revision === this.revision) {
+				const storedImpact = cloneChangeImpact(impact);
+				this.changeImpactCache.set(levelId, storedImpact);
+				const latest = this.getRequiredSnapshot();
+				if (latest.level.id === levelId) {
+					this.snapshot = {
+						...latest,
+						changeImpact: {
+							status: 'ready',
+							value: cloneChangeImpact(storedImpact),
+						},
+					};
+				}
+			}
+		} catch (error) {
+			if (revision === this.revision) {
+				const latest = this.getRequiredSnapshot();
+				if (latest.level.id === levelId) {
+					this.snapshot = {
+						...latest,
+						changeImpact: {
+							status: 'failed',
+							error: error instanceof Error
+								? error.message
+								: String(error),
+						},
+					};
+				}
+			}
+		}
+
+		return this.getRequiredSnapshot();
+	}
+
 	public clear(): void {
 		this.revision += 1;
+		this.changeImpactCache.clear();
 		this.snapshot = undefined;
 	}
 
@@ -263,6 +349,7 @@ export class AttemptSession {
 					...this.snapshot.level,
 					sections: [...this.snapshot.level.sections],
 				},
+				changeImpact: cloneChangeImpactState(this.snapshot.changeImpact),
 				latestTestEvidence: this.snapshot.latestTestEvidence
 					? {
 						...this.snapshot.latestTestEvidence,
@@ -301,6 +388,22 @@ export class AttemptSession {
 			throw new Error('Choose a level already visible in this attempt.');
 		}
 	}
+
+	private requireChangeImpactAvailable(
+		snapshot: AttemptSessionSnapshot,
+	): void {
+		const stageIndex = snapshot.attempt.levels.findIndex(
+			(level) => level.levelId === snapshot.level.id,
+		);
+		if (stageIndex <= 0) {
+			throw new Error('Code changes are available starting from stage 2.');
+		}
+
+		const progress = snapshot.attempt.levels[stageIndex];
+		if (progress.status !== 'completed' || snapshot.level.status !== 'completed') {
+			throw new Error('Complete this stage before reviewing its code changes.');
+		}
+	}
 }
 
 function cloneTestCase<T extends TestEvidence['testCases'][number]>(testCase: T): T {
@@ -308,4 +411,23 @@ function cloneTestCase<T extends TestEvidence['testCases'][number]>(testCase: T)
 		...testCase,
 		comparison: testCase.comparison ? { ...testCase.comparison } : undefined,
 	};
+}
+
+function cloneChangeImpact(impact: LevelChangeImpactDto): LevelChangeImpactDto {
+	return {
+		...impact,
+		summary: { ...impact.summary },
+		files: impact.files.map((file) => ({
+			...file,
+			addedMethods: [...file.addedMethods],
+			removedMethods: [...file.removedMethods],
+			modifiedMethods: file.modifiedMethods.map((method) => ({ ...method })),
+		})),
+	};
+}
+
+function cloneChangeImpactState(state: ChangeImpactState): ChangeImpactState {
+	return state.status === 'ready'
+		? { status: 'ready', value: cloneChangeImpact(state.value) }
+		: { ...state };
 }

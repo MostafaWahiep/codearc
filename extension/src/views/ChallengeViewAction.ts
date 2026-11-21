@@ -7,6 +7,7 @@ export enum ChallengeViewAction {
 	RetryCatalog = 'retryCatalog',
 	RunChecks = 'runChecks',
 	SelectSection = 'selectSection',
+	RetryChangeImpact = 'retryChangeImpact',
 	SelectAttemptLevel = 'selectAttemptLevel',
 	OpenWorkspace = 'openWorkspace',
 	OpenTestCase = 'openTestCase',
